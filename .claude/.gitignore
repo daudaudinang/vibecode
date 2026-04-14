@@ -1,0 +1,11 @@
+# Runtime / generated artifacts - project-specific, not global reusable
+pipeline/
+plans/
+state/
+tmp/
+memory/
+archive/
+worktrees/
+
+# Local-only settings
+settings.local.json
