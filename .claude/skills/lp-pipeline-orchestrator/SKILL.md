@@ -18,6 +18,8 @@ Skill này là source of truth cho:
 
 Wrapper skills và wrapper commands khác chỉ được phép trỏ về file này.
 
+Skill này chỉ áp đặt orchestration model cho namespace `/lp:*` và các wrapper/worker liên quan của LP. Nó không tự động áp đặt execution model đó cho các task ngoài LP hoặc các yêu cầu thông thường trong main conversation.
+
 ## Canonical responsibilities
 
 - Điều phối worker skills theo state machine

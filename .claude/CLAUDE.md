@@ -62,6 +62,13 @@ Use project-scope rules and skills under `./.claude/` as the local source of tru
 - Với `review-plan` và `review-implement`, canonical model là 4 agents độc lập theo 4 persona bắt buộc, chạy song song rồi orchestrator tổng hợp; không dùng roster recommendation mềm cho 2 flow canonical này.
 - Không dùng wording mơ hồ kiểu khiến IDE hiểu thành “đừng dùng agents”; intent đúng là “use agents, but no worktree by default”.
 
+### Default execution outside LP
+
+- Các rule orchestrator/worker ở mục LittlePea chủ yếu áp dụng cho flow `/lp:*` canonical hoặc khi user gọi skill/command LP tương ứng.
+- Ngoài LP flow, mặc định ưu tiên xử lý trực tiếp trong main conversation.
+- Chỉ spawn subagent khi task thật sự hưởng lợi rõ ràng từ parallel work, specialized expertise, hoặc codebase exploration đủ rộng để main context không còn hiệu quả.
+- Không agent hóa task nhỏ, scope rõ, hoặc chỉ cần đọc/sửa vài file đã xác định rõ.
+
 ## Verification discipline
 
 - After code edits, run a compile/syntax check when applicable.
