@@ -36,6 +36,8 @@ Các command dưới đây chỉ là compatibility/deprecated wrappers:
 - Không đặt orchestration logic đầy đủ trong command files
 - Command files chỉ là thin wrappers; skill files mới là source of truth
 - LP canonical flow dùng artifact layout dưới `.claude/plans/PLAN_<NAME>/` và `.claude/pipeline/PLAN_<NAME>/`
+- Model state/artifact canonical là: plan-scoped top-level output paths + run-scoped identity trong state/contracts
 - Canonical public commands: `/lp:plan`, `/lp:implement`, `/lp:cook`, `/lp:debug-investigator`
 - Utility wrappers: `/lp:qa-automation`, `/lp:close-task`, `/lp:lesson-capture`, `/lp:pipeline`
-- Namespace placeholders chưa có project-scope skill thật: `/lp:init-project`, `/lp:sync-agents-context`, `/lp:jira-workflow-bridge`
+- Non-canonical helper surfaces: `/lp:init-project`, `/lp:jira-workflow-bridge`
+- Namespace placeholder chưa có project-scope skill thật: `/lp:sync-agents-context`

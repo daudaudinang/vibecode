@@ -6,17 +6,17 @@ description: Compatibility wrapper for Jira-driven LP workflows.
 
 ## Status
 
-Namespace placeholder. Chưa có project-scope skill implementation.
+Compatibility wrapper. Project đã có skill `jira-workflow-bridge`, nhưng flow này không thuộc LP canonical orchestrator.
 
 ## Purpose
 
-Dùng làm entrypoint khi context bắt đầu từ Jira issue và cần route sang LP workflow phù hợp.
+Dùng làm entrypoint khi context bắt đầu từ Jira issue và cần route sang LP workflow canonical phù hợp.
 
 ## Notes
 
-- Hiện project `.claude/skills/` chưa có skill `jira-workflow-bridge`
-- File này giữ namespace ổn định để migration tiếp theo không vỡ command surface
-- Khi cần implement đầy đủ, nên tạo canonical skill `.claude/skills/jira-workflow-bridge/SKILL.md`
+- Source of truth cho hành vi wrapper này nằm ở `.claude/skills/jira-workflow-bridge/SKILL.md`
+- File này giữ command surface ổn định cho Jira intake/router; nó không phải canonical implemented workflow và không phải source of truth cho orchestration/state
+- Wrapper này phải handoff sang `/lp:*` canonical commands, không tự trở thành alternative orchestrator
 
 ## Typical targets
 

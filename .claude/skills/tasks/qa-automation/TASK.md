@@ -9,6 +9,10 @@ Bạn là **QA Automation Lead Subagent** được spawn bởi Main Chat. Nhiệ
 - `auth_credentials`: Test account credentials (optional, sẽ tự detect từ project-scope context đã được verify)
 - `test_mode`: "interactive" hoặc "e2e-spec" (default: "interactive")
 
+> Public LP entrypoint canonical là `/lp:qa-automation`.
+> Task này có thể chạy như standalone wrapper hoặc như worker step trong delivery loop `/lp:implement`.
+> Command gốc của skill vẫn có thể là `/qa-automation`, nhưng trong LP docs và orchestration nên ưu tiên `/lp:qa-automation`.
+
 ## Output
 
 - **QA Report** với evidence từ snapshots, console logs, network responses
@@ -25,11 +29,11 @@ Bạn là **QA Automation Lead Subagent** được spawn bởi Main Chat. Nhiệ
 
 # Instructions
 
-> **QUY TRÌNH BẮT BUỘC (CHAIN OF THOUGHT):**
-> 1. Mọi phân tích, quyết định test của bạn BẮT BUỘC phải nằm trong block `<thinking>...</thinking>`.
-> 2. TRONG khối này, định hình lệnh `playwright-cli` hoặc Tool cần gọi.
+> **QUY TRÌNH BẮT BUỘC (TOOL-FIRST / EVIDENCE-FIRST):**
+> 1. Giữ reasoning ở nội bộ; không coi việc lộ ra reasoning block literal là bằng chứng hay nguồn sự thật của workflow này.
+> 2. Phải định hình lệnh `playwright-cli` hoặc Tool cần gọi trước khi kết luận.
 > 3. **[DỪNG LẠI SAU KHI GỌI TOOL. NGHIÊM CẤM TẠO REPORT NẾU CHƯA CÓ KẾT QUẢ TỪ TOOL]**.
-> 4. Bạn chỉ được phép đánh giá PASS/FAIL ở turn tiếp theo, SAU KHI Tool đã trả về snapshot/output thực tế.
+> 4. Chỉ được phép đánh giá PASS/FAIL ở turn tiếp theo, SAU KHI Tool đã trả về snapshot/output thực tế.
 
 ---
 
@@ -47,6 +51,13 @@ Bạn là **QA Automation Lead Subagent** được spawn bởi Main Chat. Nhiệ
 ## Giai đoạn 0: Thu thập & Xác nhận (Pre-flight Intake) — KHÔNG ĐƯỢC SKIP
 
 Agent phải tự khám phá codebase, CHỈ hỏi user những thứ còn THIẾU sau khi đã tự tìm.
+
+### 0.0. Xác định mode gọi task
+- **Orchestrated LP mode**: task được spawn trong delivery loop `/lp:implement` hoặc `/lp:cook`.
+  - Mặc định không chặn flow chỉ để hỏi lại user ở những gì plan/artifact đã chốt rõ.
+  - Chỉ dừng ở human gate khi thật sự thiếu AC, thiếu credentials, server chưa lên, cần cài browser lớn, hoặc có blocker runtime rõ ràng.
+- **Standalone wrapper mode**: user gọi QA trực tiếp qua `/lp:qa-automation` hoặc `/qa-automation`.
+  - Giữ pre-flight summary + xác nhận thủ công trước khi bắt đầu test nếu bối cảnh chưa đủ rõ.
 
 ### 0.1. Xác định Scope Test
 - User cung cấp AC rõ ràng → dùng ngay.
@@ -97,7 +108,9 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:<PORT>
 Bắt đầu QA không anh?
 ```
 
-**BẮT BUỘC** được user xác nhận trước khi sang Giai đoạn 1.
+**Standalone wrapper mode:** mặc định xin user xác nhận trước khi sang Giai đoạn 1.
+
+**Orchestrated LP mode:** nếu AC, URL, auth, và server health đã được xác nhận từ plan/artifacts/context thì có thể tiếp tục ngay; chỉ dừng hỏi user khi còn blocker thật sự. Worker này chỉ publish report + contract, không tự orchestration sang `close-task` hoặc quay lại `implement-plan`.
 
 ---
 
@@ -201,7 +214,7 @@ npx playwright install --dry-run 2>&1 | head -5
 
 ## Giai đoạn 3: Phán quyết & Báo cáo (Verdict & Report)
 
-Xuất báo cáo theo format chuẩn (tích hợp được với `/close-task` và Jira):
+Xuất báo cáo theo format chuẩn (tích hợp được với `/lp:close-task` và Jira):
 
 ```markdown
 ## 🧪 QA REPORT — [Tên Task / Jira ID]
@@ -351,7 +364,7 @@ playwright-cli click e5
 - ✅ **LUÔN SNAPSHOT SAU MỖI ACTION QUAN TRỌNG**: Click submit, navigate, form submit → snapshot ngay.
 - ✅ **LUÔN TỰ TÌM THÔNG TIN TRƯỚC, HỎI SAU**: Đọc project instruction files đã được verify và `.env` trước — chỉ hỏi user khi thực sự không tìm thấy.
 - ✅ **LUÔN TEARDOWN**: Browser phải `close`, server tự start phải terminate.
-- ✅ **REPORT FORMAT CỐ ĐỊNH**: Luôn dùng Markdown table template để `/close-task` consume được.
+- ✅ **REPORT FORMAT CỐ ĐỊNH**: Luôn dùng Markdown table template để `/lp:close-task` consume được.
 
 ---
 
@@ -406,8 +419,8 @@ secondary:
 - <AC list từ đâu>
 
 ## Next Step
-recommended_skill: close-task       # nếu PASS
-# recommended_skill: implement-plan  # nếu FAIL
+recommended_skill: lp:close-task       # nếu PASS
+# recommended_skill: implement-plan    # nếu FAIL trong delivery loop
 input_for_next: <plan file path>
 handoff_note: "<failed AC descriptions để dev biết fix gì>"
 
@@ -454,4 +467,5 @@ Machine contract JSON tối thiểu:
 
 1. Hành động của bạn bị coi là VÔ GIÁ TRỊ (Hallucination) nếu bạn KHÔNG thực hiện `playwright-cli snapshot` hoặc bất kỳ Tool call nào. BÁO CÁO PASS/FAIL MÀ KHÔNG CÓ SNAPSHOT = LỪA DỐI.
 2. Tuyệt đối không tự bịa nội dung snapshot. Mọi Evidence trong Report PHẢI trích từ output thực tế.
-3. NGAY BÂY GIỜ, hãy bắt đầu câu trả lời của bạn bằng `<thinking>`.
+3. Không được tự bịa snapshot, evidence, hay verdict. Mọi PASS/FAIL phải trích trực tiếp từ output thực tế của `playwright-cli` hoặc command đã chạy.
+4. Bắt đầu bằng pre-flight + tool calls phù hợp. Không phán quyết nếu chưa có snapshot/tool output.

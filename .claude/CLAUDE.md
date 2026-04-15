@@ -42,7 +42,8 @@ Use project-scope rules and skills under `./.claude/` as the local source of tru
 - Public orchestration commands: `/lp:plan`, `/lp:implement`, `/lp:cook`, `/lp:debug-investigator`
 - Utility wrappers: `/lp:qa-automation`, `/lp:close-task`, `/lp:lesson-capture`, `/lp:pipeline`
 - Deprecated worker aliases: `/lp:create-plan`, `/lp:review-plan`, `/lp:implement-plan`
-- Namespace placeholders chưa có project-scope skill thật: `/lp:init-project`, `/lp:sync-agents-context`, `/lp:jira-workflow-bridge`
+- Non-canonical helper surfaces: `/lp:init-project`, `/lp:jira-workflow-bridge`
+- Namespace placeholder chưa có project-scope skill thật: `/lp:sync-agents-context`
 - QA trong LP delivery loop vẫn chủ yếu được điều phối nội bộ bằng worker skill `qa-automation`, thường đi qua `/lp:implement` hoặc `/lp:cook`.
 - Khi cần chạy QA như LP namespace wrapper độc lập, dùng `/lp:qa-automation`.
 - Command gốc của skill vẫn tồn tại là `/qa-automation`, nhưng trong LP docs nên ưu tiên `/lp:qa-automation` cho nhất quán namespace.

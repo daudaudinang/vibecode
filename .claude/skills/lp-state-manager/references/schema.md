@@ -93,8 +93,9 @@ Notes:
 
 Notes:
 
-- Layout canonical hiện là plan-scoped.
-- `RUN_<WORKFLOW_ID>` vẫn giữ vai trò runtime identity trong state metadata/V2 tables, không còn là bắt buộc trong artifact folder path mặc định.
+- Layout canonical hiện là plan-scoped cho top-level step outputs.
+- `RUN_<WORKFLOW_ID>` vẫn giữ vai trò runtime identity trong state metadata/V2 tables.
+- Artifact legacy hoặc child-job paths vẫn có thể chứa `RUN_<WORKFLOW_ID>` cho compatibility và runtime forensics, nhưng đó không còn là canonical top-level output root mặc định.
 
 ## Path and identity rules
 

@@ -61,7 +61,7 @@ V2_DEFAULT_LEASE_TTL_SECONDS = 900
 V2_DEFAULT_ATTEMPT_NO = 1
 V2_DEFAULT_LEASE_REVISION = 1
 V2_SCHEMA_NOTES = {
-    'artifact_root_pattern': '.claude/pipeline/<PLAN_NAME>/RUN_<ID>/',
+    'artifact_root_pattern': '.claude/pipeline/<PLAN_NAME>/',
     'child_job_root_pattern': '.claude/pipeline/<PLAN_NAME>/RUN_<ID>/child-jobs/JOB_<ID>/',
 }
 
@@ -839,7 +839,7 @@ def create_workflow(conn: sqlite3.Connection, args: argparse.Namespace) -> dict[
         metadata.update(json_loads(args.metadata_json, {}))
     metadata.setdefault('plan_name', args.plan_name)
     metadata.setdefault('workflow_id', workflow_id)
-    metadata.setdefault('artifact_root', f'.claude/pipeline/{args.plan_name}/RUN_{workflow_id}')
+    metadata.setdefault('artifact_root', f'.claude/pipeline/{args.plan_name}')
     metadata.setdefault('plan_root', f'.claude/plans/{args.plan_name}')
     metadata.setdefault('current_primary_run_id', f'RUN_{workflow_id}')
     metadata.setdefault('plan_status', V2_DEFAULT_PLAN_STATUS)

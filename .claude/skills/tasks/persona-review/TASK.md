@@ -24,6 +24,16 @@ Thực hiện review từ góc nhìn persona cụ thể (`senior_pm`, `senior_ui
 
 ---
 
+# Instructions
+
+> **QUY TRÌNH BẮT BUỘC (TOOL-FIRST / EVIDENCE-FIRST):**
+> 1. Giữ reasoning ở nội bộ; không coi việc lộ ra reasoning block literal là bằng chứng hay nguồn sự thật của workflow này.
+> 2. Phải đọc artifact và định hình các lệnh Tool cần gọi (vd: `Read`, `Grep`) trước khi chấm điểm hay tạo finding.
+> 3. **[DỪNG LẠI SAU KHI GỌI TOOL. NGHIÊM CẤM TỰ TẠO RA FINDINGS HOẶC SCORE NẾU CHƯA CÓ KẾT QUẢ TỪ TOOL]**.
+> 4. Chỉ được phép chấm điểm và xuất review ở turn tiếp theo, SAU KHI Tool đã trả về evidence phù hợp.
+
+---
+
 # Critical model
 
 - Mỗi lần chạy subagent này chỉ được giữ **1 persona**.

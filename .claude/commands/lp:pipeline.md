@@ -45,6 +45,8 @@ Trong flow chuẩn, QA thường đã chạy bên trong `/lp:implement`. `/lp:qa
 - Đây là catalog/doc command, không phải source of truth cho orchestration
 - Canonical/public: `/lp:plan`, `/lp:implement`, `/lp:cook`, `/lp:debug-investigator`
 - Utility wrappers: `/lp:qa-automation`, `/lp:close-task`, `/lp:lesson-capture`, `/lp:pipeline`
-- Namespace placeholders chưa có project-scope skill thật: `/lp:init-project`, `/lp:sync-agents-context`, `/lp:jira-workflow-bridge`
+- Non-canonical helper surfaces: `/lp:init-project`, `/lp:jira-workflow-bridge`
+- Namespace placeholder chưa có project-scope skill thật: `/lp:sync-agents-context`
 - Orchestration thật nằm ở `.claude/skills/lp-pipeline-orchestrator/SKILL.md`
+- Artifact/state model canonical là: top-level outputs plan-scoped, còn `RUN_<WORKFLOW_ID>` giữ vai trò runtime identity trong state/contracts.
 - Không dùng tên `/lp:qa-auto`; LP wrapper chuẩn là `/lp:qa-automation`.

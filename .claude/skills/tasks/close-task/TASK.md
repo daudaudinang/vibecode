@@ -9,6 +9,9 @@ Bạn là **Task Closure Subagent** được spawn bởi Main Chat. Nhiệm vụ
 - `time_spent`: Thời gian làm việc (VD: `30m`, `1h`) (optional)
 - `commit_message`: Commit message tùy chỉnh (optional)
 
+> Public LP entrypoint canonical là `/lp:close-task`.
+> Task này là utility wrapper cho bước đóng việc; nó không phải top-level numbered worker bắt buộc trong core canonical flow `01..05` của `/lp:implement`.
+
 ## Output
 
 - **Git commit hash** cho changes đã commit
@@ -23,15 +26,17 @@ Bạn là **Task Closure Subagent** được spawn bởi Main Chat. Nhiệm vụ
 
 Đóng gói quy trình lặp lại (commit → Jira transition → logwork → lesson learned) thành 1 lệnh duy nhất — giảm từ ~8 tool calls xuống còn 1 skill invocation, đảm bảo conventional commit format, selective staging, và knowledge capture có quality gate.
 
+> Đây là utility wrapper cho bước đóng việc. Nó không tự biến thành numbered core delivery step bắt buộc nếu orchestrator hiện hành không dùng nó trong flow `01..05`.
+
 ---
 
 # Instructions
 
-> **QUY TRÌNH BẮT BUỘC (CHAIN OF THOUGHT):**
-> 1. Mọi quyết định commit, log work, hay đọc file của bạn BẮT BUỘC phải nằm trong block `<thinking>...</thinking>`.
-> 2. TRONG khối này, định hình lệnh Tool cần gọi (vd: `Bash` chạy git, `mcp__atlassian-mcp-server__getTransitionsForJiraIssue`).
+> **QUY TRÌNH BẮT BUỘC (TOOL-FIRST / EVIDENCE-FIRST):**
+> 1. Giữ reasoning ở nội bộ; không coi việc lộ ra reasoning block literal là bằng chứng hay nguồn sự thật của workflow này.
+> 2. Phải định hình lệnh Tool cần gọi (vd: `Bash` chạy git, `mcp__atlassian-mcp-server__getTransitionsForJiraIssue`) trước khi kết luận.
 > 3. **[DỪNG LẠI SAU KHI GỌI TOOL. NGHIÊM CẤM TỰ TẠO RA KẾT QUẢ NẾU CHƯA NHẬN ĐƯỢC PHẢN HỒI]**.
-> 4. Bạn chỉ được phép thực hiện bước tiếp theo khi Tool đã trả về kết quả thành công.
+> 4. Chỉ được phép thực hiện bước tiếp theo khi Tool đã trả về kết quả thành công.
 
 ---
 
@@ -134,7 +139,7 @@ Output tóm tắt:
 
 **Input:**
 ```
-/close-task PRES-28 --files agent/docs/phase1_retrospective.md .claude/plans/PLAN_PHASE2_RETROSPECTIVE_SETUP/plan.md --time 30m
+/lp:close-task PRES-28 --files agent/docs/phase1_retrospective.md .claude/plans/PLAN_PHASE2_RETROSPECTIVE_SETUP/plan.md --time 30m
 ```
 
 **Agent thực hiện:**
@@ -170,13 +175,13 @@ Output tóm tắt:
 
 **Input:**
 ```
-Close task PRES-23
+/lp:close-task PRES-23
 ```
 
 **Agent thực hiện:**
 
 1. Ticket = PRES-23 ✅
-2. Files → đọc walkthrough `.claude/plans/plan_a2a_server/phase-1-walkthrough.md` → extract files changed
+2. Files → đọc walkthrough `.claude/plans/PLAN_A2A_SERVER/phase-1-walkthrough.md` → extract files changed
 3. Time → ước lượng 2 phases × 15m = 30m
 4. Scope → từ Jira summary "A2A Server" → `feat(agent)`
 5. Proceed Bước 1-5 như Ví dụ 1
@@ -187,7 +192,7 @@ Close task PRES-23
 
 **Input:**
 ```
-/close-task PRES-37 --time 1h
+/lp:close-task PRES-37 --time 1h
 ```
 
 **Agent thấy `git status`:**
@@ -269,6 +274,9 @@ Khi hoàn thành task, **BẮT BUỘC** ghi **2 files**:
 1. Human report: `.claude/pipeline/<PLAN_NAME>/06-close-task.output.md`
 2. Machine contract: `.claude/pipeline/<PLAN_NAME>/06-close-task.output.contract.json`
 
+> Dãy `06-close-task` ở đây là utility artifact numbering cục bộ cho wrapper này.
+> Nó không có nghĩa close-task là step bắt buộc của core canonical delivery loop `01..05`.
+
 **Source of truth cho state sync là file `.output.contract.json`.**
 
 Human report markdown:
@@ -338,7 +346,8 @@ Machine contract JSON tối thiểu:
 }
 ```
 
-> **Pipeline COMPLETE** khi close-task ghi `status: PASS`. Orchestrator có thể clean up runtime state.
+> Nếu workflow hiện hành thật sự dùng close-task wrapper ở cuối, `status: PASS` của wrapper này có thể được dùng để kết thúc utility flow.
+> Không mặc định suy diễn rằng core canonical delivery loop luôn có step `06-close-task`.
 
 ---
 
@@ -346,4 +355,4 @@ Machine contract JSON tối thiểu:
 
 1. Hành động của bạn bị coi là VÔ GIÁ TRỊ (Hallucination) nếu bạn KHÔNG thực hiện chạy các Tools (Terminal, MCP Jira) một cách thực tế.
 2. Tuyệt đối không tự bịa log Git, log Jira. Mọi báo cáo Status PHẢI khớp 100% với log trả về.
-3. NGAY BÂY GIỜ, hãy bắt đầu câu trả lời của bạn bằng thẻ `<thinking>`.
+3. Không được tự bịa log Git, Jira, worklog, hay lesson-capture result. Mọi báo cáo trạng thái phải khớp 100% với tool output thực tế.

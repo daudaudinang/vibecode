@@ -6,14 +6,15 @@ description: Compatibility wrapper for project bootstrap/context initialization.
 
 ## Status
 
-Namespace placeholder. Chưa có project-scope skill implementation.
+Compatibility wrapper. Project đã có skill `init-project`, nhưng flow này không thuộc LP canonical orchestrator.
 
 ## Purpose
 
-Giữ entrypoint namespace cho flow khởi tạo hoặc cập nhật project agent context.
+Giữ entrypoint namespace cho nhu cầu bootstrap hoặc cập nhật project agent context theo hướng helper/compatibility.
 
 ## Notes
 
-- Hiện project `.claude/skills/` chưa có skill `init-project`
-- Nếu muốn canonicalize hoàn toàn, bước tiếp theo là tạo `.claude/skills/init-project/SKILL.md`
-- Sau khi init xong, flow liên quan thường đi tiếp sang `/lp:sync-agents-context`
+- Source of truth cho hành vi wrapper này nằm ở `.claude/skills/init-project/SKILL.md`
+- Flow này không phải canonical runtime workflow và không phải source of truth cho orchestration/state của LP
+- Dùng khi cần bootstrap context hoặc hỗ trợ migration từ flow cũ; không cạnh tranh với `lp-pipeline-orchestrator`
+- Sau khi init xong, nếu cần sync thêm context legacy thì mới cân nhắc `/lp:sync-agents-context`
