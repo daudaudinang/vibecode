@@ -1,30 +1,31 @@
 # TASK: Close Task
 
-Bạn là **Task Closure Subagent** được spawn bởi Main Chat. Nhiệm vụ: Commit code changes, transition Jira ticket to Done, log work, and capture lessons learned.
+Bạn là **Task Closure Subagent** được spawn bởi Main Chat. Nhiệm vụ: commit code changes, transition Jira ticket to Done, log work, và capture lessons learned.
 
 ## Input
 
-- `ticket_key`: Jira ticket key (VD: `PRES-28`)
-- `files`: Danh sách files thuộc task này (optional)
-- `time_spent`: Thời gian làm việc (VD: `30m`, `1h`) (optional)
-- `commit_message`: Commit message tùy chỉnh (optional)
+- `ticket_key`: Jira ticket key (vd: `PRES-28`)
+- `files`: danh sách files thuộc task này (optional)
+- `time_spent`: thời gian làm việc (optional)
+- `commit_message`: commit message tuỳ chỉnh (optional)
 
 > Public LP entrypoint canonical là `/lp:close-task`.
 > Task này là utility wrapper cho bước đóng việc; nó không phải top-level numbered worker bắt buộc trong core canonical flow `01..05` của `/lp:implement`.
 
 ## Output
 
-- **Git commit hash** cho changes đã commit
-- **Jira transition status** (Done)
-- **Worklog ID** cho logged work
-- **Lessons captured** (nếu có)
-- **Output contract**: `.claude/pipeline/<PLAN_NAME>/06-close-task.output.md` + `.contract.json`
+- git commit hash cho changes đã commit
+- Jira transition status
+- worklog ID
+- lesson capture status
+- Human report: `.claude/pipeline/<PLAN_NAME>/06-close-task.output.md`
+- Machine contract: `.claude/pipeline/<PLAN_NAME>/06-close-task.output.contract.json`
 
 ---
 
 # Goal
 
-Đóng gói quy trình lặp lại (commit → Jira transition → logwork → lesson learned) thành 1 lệnh duy nhất — giảm từ ~8 tool calls xuống còn 1 skill invocation, đảm bảo conventional commit format, selective staging, và knowledge capture có quality gate.
+Đóng gói flow lặp lại `commit -> Jira transition -> logwork -> lesson capture` thành một worker có verify gates rõ, selective staging, và evidence thật cho từng bước.
 
 > Đây là utility wrapper cho bước đóng việc. Nó không tự biến thành numbered core delivery step bắt buộc nếu orchestrator hiện hành không dùng nó trong flow `01..05`.
 
@@ -33,248 +34,217 @@ Bạn là **Task Closure Subagent** được spawn bởi Main Chat. Nhiệm vụ
 # Instructions
 
 > **QUY TRÌNH BẮT BUỘC (TOOL-FIRST / EVIDENCE-FIRST):**
-> 1. Giữ reasoning ở nội bộ; không coi việc lộ ra reasoning block literal là bằng chứng hay nguồn sự thật của workflow này.
-> 2. Phải định hình lệnh Tool cần gọi (vd: `Bash` chạy git, `mcp__atlassian-mcp-server__getTransitionsForJiraIssue`) trước khi kết luận.
-> 3. **[DỪNG LẠI SAU KHI GỌI TOOL. NGHIÊM CẤM TỰ TẠO RA KẾT QUẢ NẾU CHƯA NHẬN ĐƯỢC PHẢN HỒI]**.
-> 4. Chỉ được phép thực hiện bước tiếp theo khi Tool đã trả về kết quả thành công.
+> 1. Giữ reasoning ở nội bộ; reasoning literal không phải evidence.
+> 2. Phải định hình Tool calls cần dùng (vd: `Bash` cho git, MCP Jira tools) trước khi kết luận.
+> 3. **[DỪNG LẠI SAU KHI GỌI TOOL. NGHIÊM CẤM TỰ TẠO KẾT QUẢ NẾU CHƯA NHẬN ĐƯỢC PHẢN HỒI]**.
+> 4. Chỉ được thực hiện bước tiếp theo khi Tool đã trả về kết quả thành công.
 
 ---
 
-## Bước 0: Thu thập thông tin
+# Non-negotiable gates
 
-1. Xác định **Jira ticket key** từ input user (VD: `PRES-28`).
-   - Nếu user không cung cấp → Hỏi: "Ticket Jira nào cần đóng?"
-2. Xác định **danh sách files** thuộc task này:
-   - **Ưu tiên 1**: User cung cấp trực tiếp (VD: "commit file X, Y, Z")
-   - **Ưu tiên 2**: Đọc từ walkthrough file gần nhất (`.claude/plans/*/phase-*-walkthrough.md`)
-   - **Ưu tiên 3**: Hỏi user: "Những files nào thuộc task này?"
-3. Xác định **thời gian làm việc** (timeSpent):
-   - **Ưu tiên 1**: User cung cấp (VD: "log 30m", "1h")
-   - **Ưu tiên 2**: Ước lượng từ walkthrough (số phases × 15m mỗi phase)
-   - **Ưu tiên 3**: Hỏi user: "Ước lượng thời gian làm task này?"
-4. Xác định **commit message scope** và **type**:
-   - Đọc Jira summary để xác định scope (VD: `agent`, `nextjs`, `config`)
-   - Xác định type từ nội dung thay đổi: `feat`, `fix`, `docs`, `refactor`, `chore`, `test`
+| Gate | Rule |
+|------|------|
+| G1 TOOL_FIRST | Phải định hình tool calls trước khi kết luận |
+| G2 STATUS_BEFORE_STAGE | Bắt buộc chạy `git status --short` trước staging/commit |
+| G3 SELECTIVE_STAGE | Chỉ stage files thuộc task hiện tại |
+| G4 NO_FAKE_GIT_JIRA | Không bịa git log, Jira transition, worklog, lesson result |
+| G5 JIRA_AFTER_COMMIT | Không transition Jira nếu commit thất bại |
+| G6 LOGWORK_REQUIRED | Không skip logwork nếu flow close-task đang thực thi đầy đủ |
+| G7 CONTRACT_SYNC | `.output.contract.json` là source of truth cho state sync |
+
+**Tool-first / evidence-first bắt buộc:**
+1. Giữ reasoning ở nội bộ.
+2. Phải định hình lệnh git / Jira / lesson tool trước khi kết luận.
+3. **Dừng sau tool call. Không tự tạo kết quả nếu chưa có phản hồi thành công.**
+4. Chỉ thực hiện bước tiếp theo sau khi bước trước có evidence thật.
 
 ---
 
-## Bước 1: Selective Git Staging
+# Flow DSL
 
-1. **CỬA ẢI BẮT BUỘC (VERIFICATION GATE):** BẮT BUỘC phải chạy `git status --short` và nhận kết quả TRƯỚC KHI thực hiện các lệnh `git add` hay `git commit`. KHÔNG ĐƯỢC CHẠY GỘP, việc tự đoán trạng thái git files bị coi là LỪA DỐI (Hallucination).
-2. Stage CHỈ các files thuộc task:
+```text
+S0 Intake
+  - resolve ticket / files / time / commit scope
+
+S1 Selective Staging
+  - git status --short
+  - stage only task files
+  - verify staged files
+
+S2 Commit
+  - generate conventional commit message
+  - commit
+  - verify commit hash
+
+S3 Jira Transition
+  - fetch transitions
+  - move to Done (or fallback path if needed)
+
+S4 Log Work
+  - add worklog with summary + verify evidence
+
+S5 Lesson Capture
+  - invoke lesson-capture flow if applicable
+  - user approve or skip
+
+S6 Publish
+  - summarize outputs
+  - write report + contract
+```
+
+---
+
+# S0 — Intake
+
+## Phải xác định
+
+1. `ticket_key`
+   - nếu thiếu → hỏi user
+2. `files` thuộc task
+   - ưu tiên user cung cấp trực tiếp
+   - nếu không có, đọc walkthrough gần nhất để suy ra
+   - vẫn không rõ → hỏi user
+3. `time_spent`
+   - ưu tiên user cung cấp
+   - nếu không có, có thể ước lượng từ walkthrough
+   - vẫn không rõ → hỏi user
+4. commit `type` và `scope`
+   - scope nên bám Jira summary hoặc nội dung thay đổi
+   - type: `feat`, `fix`, `docs`, `refactor`, `chore`, `test`
+
+---
+
+# S1 — Selective staging
+
+## Verification gate bắt buộc
+
+Phải chạy `git status --short` và nhận kết quả **trước** `git add` hay `git commit`.
+
+## Rules
+
+1. Chỉ stage files thuộc task:
    ```bash
    git add <file1> <file2> ...
    ```
-3. Verify staged files:
+2. Verify staged files:
    ```bash
    git status --short -- <staged_files>
    ```
-4. **Nếu** có files đã staged từ trước (từ task khác) → CẢNH BÁO user và chỉ commit files của task này.
+3. Nếu phát hiện files đã staged/modified từ task khác → cảnh báo user và chỉ commit files của task hiện tại.
+4. Không dùng `git add .` cho flow này.
 
 ---
 
-## Bước 2: Git Commit (Conventional Format)
+# S2 — Commit
 
-1. Tạo commit message theo Conventional Commits:
-   ```
-   <type>(<scope>): <TICKET-KEY> <description>
+## Commit message format
 
-   - <bullet point 1>
-   - <bullet point 2>
-   ```
-2. Chạy `git commit -m "<message>"`.
-3. Verify commit: `git log -1 --oneline`.
+Dùng Conventional Commits:
+
+```text
+<type>(<scope>): <TICKET-KEY> <description>
+
+- <bullet 1>
+- <bullet 2>
+```
+
+## Rules
+
+1. Tạo commit message đúng format.
+2. Chạy commit.
+3. Verify bằng `git log -1 --oneline` hoặc output commit tương đương.
+4. Nếu commit fail → dừng, không sang Jira transition.
 
 ---
 
-## Bước 3: Jira Transition → Done
+# S3 — Jira transition
 
-1. Lấy available transitions: `mcp__atlassian-mcp-server__getTransitionsForJiraIssue`.
-2. Tìm transition có `name = "Done"` → lấy `id`.
-3. Thực hiện transition: `mcp__atlassian-mcp-server__transitionJiraIssue` với transition id.
-4. **Nếu** transition "Done" không available → thử "In Progress" → "Done" (2 bước). Nếu vẫn không được → báo user.
+1. Lấy available transitions.
+2. Tìm transition `Done`.
+3. Nếu có → transition ngay.
+4. Nếu `Done` không available → thử fallback path phù hợp (vd: `In Progress -> Done`) nếu workflow Jira yêu cầu.
+5. Nếu vẫn fail → báo user với evidence cụ thể.
 
 ---
 
-## Bước 4: Log Work
+# S4 — Log work
 
 1. Tạo worklog comment tóm tắt:
-   - Những gì đã implement
-   - Kết quả verify (ACs, test suite)
-2. Gọi `mcp__atlassian-mcp-server__addWorklogToJiraIssue` với:
-   - `timeSpent`: từ Bước 0
-   - `commentBody`: tóm tắt công việc
+   - đã implement gì
+   - verify gì đã chạy
+2. Gọi Jira worklog tool với `timeSpent` + `commentBody`.
+3. Không skip logwork khi flow này đang chạy đầy đủ.
 
 ---
 
-## Bước 5: 🧠 Lesson Capture
+# S5 — Lesson capture
 
-> **Skill Reference:** Đọc và thực thi `.claude/skills/lesson-capture/SKILL.md`
-> Skill này chạy 4-gate quality framework (Eligibility → Classification+Scope → Verification → User Approval).
-> Agent sẽ đề xuất lessons → User approve/reject/edit → Ghi vào root `CLAUDE.md` theo policy của skill lesson-capture.
-
-1. Đọc `.claude/skills/lesson-capture/SKILL.md`
-2. Thực thi theo instructions (Gate 1→2→3→4)
-3. **Nếu user skip** hoặc không có lesson đáng ghi → Ghi nhận "skipped", sang Bước 6
+- Đọc và thực thi flow của `.claude/skills/lesson-capture/SKILL.md`
+- Tuân thủ nguyên tắc: **agent đề xuất -> user approve/edit/reject -> mới ghi**
+- Nếu không có lesson đáng ghi hoặc user skip → ghi nhận `skipped`
 
 ---
 
-## Bước 6: Báo cáo kết quả
+# S6 — Publish
 
-Output tóm tắt:
+## Summary format
 
-```
-✅ Task <TICKET-KEY> closed:
-- Git: committed <N> files → <commit_hash>
-- Jira: transitioned to Done ✅
-- Worklog: logged <timeSpent> ✅
-- Lessons: <N> learned captured → project context sink ✅ (hoặc "skipped")
-```
-
----
-
-# Examples
-
-## Ví dụ 1: Happy path — User cung cấp đầy đủ thông tin
-
-**Input:**
-```
-/lp:close-task PRES-28 --files agent/docs/phase1_retrospective.md .claude/plans/PLAN_PHASE2_RETROSPECTIVE_SETUP/plan.md --time 30m
+```text
+Task <TICKET-KEY> closed:
+- Git: committed <N> files -> <commit_hash>
+- Jira: transitioned to Done | failed | skipped
+- Worklog: logged <timeSpent>
+- Lessons: <captured | skipped>
 ```
 
-**Agent thực hiện:**
+## Contract rules
 
-```
-📌 Bước 1: Staging 2 files...
-   git add agent/docs/phase1_retrospective.md .claude/plans/PLAN_PHASE2_RETROSPECTIVE_SETUP/plan.md
-   → A  agent/docs/phase1_retrospective.md
-   → A  .claude/plans/PLAN_PHASE2_RETROSPECTIVE_SETUP/plan.md
-
-📌 Bước 2: Committing...
-   git commit -m "docs(agent): PRES-28 Phase 1 retrospective + Phase 2 setup
-
-   - Create phase1_retrospective.md with 5 sections
-   - All 6 ACs verified: tests pass, imports OK"
-   → [feat/a2a abc1234] docs(agent): PRES-28 Phase 1 retrospective...
-
-📌 Bước 3: Jira transition...
-   → PRES-28: To Do → Done ✅
-
-📌 Bước 4: Logging work...
-   → 30m logged ✅
-
-✅ Task PRES-28 closed:
-- Git: committed 2 files → abc1234
-- Jira: transitioned to Done ✅
-- Worklog: logged 30m ✅
-```
-
----
-
-## Ví dụ 2: User chỉ cung cấp ticket — Agent tự thu thập
-
-**Input:**
-```
-/lp:close-task PRES-23
-```
-
-**Agent thực hiện:**
-
-1. Ticket = PRES-23 ✅
-2. Files → đọc walkthrough `.claude/plans/PLAN_A2A_SERVER/phase-1-walkthrough.md` → extract files changed
-3. Time → ước lượng 2 phases × 15m = 30m
-4. Scope → từ Jira summary "A2A Server" → `feat(agent)`
-5. Proceed Bước 1-5 như Ví dụ 1
-
----
-
-## Ví dụ 3: Parallel tasks — Selective staging cần thiết
-
-**Input:**
-```
-/lp:close-task PRES-37 --time 1h
-```
-
-**Agent thấy `git status`:**
-```
-M  agent/logging_setup.py       ← thuộc PRES-37
-M  agent/middleware.py           ← thuộc PRES-37
-M  agent/tools/query.py          ← thuộc PRES-21 (task khác!)
-A  agent/tests/test_safeguards.py ← thuộc PRES-37
-```
-
-**Agent xử lý:**
-```
-⚠️ Phát hiện agent/tools/query.py đã modified nhưng KHÔNG thuộc PRES-37.
-   Chỉ stage: logging_setup.py, middleware.py, test_safeguards.py
-```
+- Human report: `.claude/pipeline/<PLAN_NAME>/06-close-task.output.md`
+- Machine contract: `.claude/pipeline/<PLAN_NAME>/06-close-task.output.contract.json`
+- Utility numbering `06-close-task` là artifact numbering cục bộ cho wrapper này; không suy diễn nó là core mandatory step `01..05`
 
 ---
 
 # Constraints
 
-- ✅ LUÔN LUÔN dùng **Conventional Commits** format (`<type>(<scope>): <description>`)
-- ✅ LUÔN LUÔN chỉ stage files thuộc task hiện tại — KHÔNG stage files của task khác
-- ✅ LUÔN LUÔN verify staged files trước khi commit
-- 🚫 KHÔNG ĐƯỢC commit tất cả files (`git add .`) khi user đang làm parallel tasks
-- 🚫 KHÔNG ĐƯỢC transition Jira nếu commit thất bại
-- 🚫 KHÔNG ĐƯỢC skip logwork — luôn log dù chỉ 15m
-- ⚠️ Nếu commit cần user approval (tool chưa auto-run) → đợi approval xong mới tiếp Jira transition
+- luôn dùng Conventional Commits
+- luôn selective stage
+- luôn verify staged files trước commit
+- không stage files của task khác
+- không transition Jira nếu commit fail
+- không bịa git/Jira/worklog/lesson result
+- nếu tool cần user approval thì chờ approval xong mới tiếp bước sau
 
-## Về Lesson Capture (Bước 5)
+## Lesson capture note
 
-> Constraints chi tiết nằm trong `.claude/skills/lesson-capture/SKILL.md` → Constraints section.
-> Nguyên tắc chính: Agent ĐỀ XUẤT → User APPROVE → KHÔNG tự ghi. Không có lesson đáng ghi → Skip.
+Constraints chi tiết nằm trong `.claude/skills/lesson-capture/SKILL.md`.
+Nguyên tắc chính: đề xuất -> user approve -> mới ghi. Không có lesson đáng ghi -> skip.
 
 ---
 
-# Checklist Close Task
+# Checklist /lp:close-task
 
 ```markdown
-- [ ] **BƯỚC 0: THU THẬP**
-  - [ ] Xác định ticket key
-  - [ ] Xác định files thuộc task
-  - [ ] Xác định thời gian làm việc
-  - [ ] Xác định commit type và scope
-
-- [ ] **BƯỚC 1: STAGING**
-  - [ ] Chạy git status --short (VERIFICATION GATE)
-  - [ ] Stage chỉ files thuộc task
-  - [ ] Verify staged files
-
-- [ ] **BƯỚC 2: COMMIT**
-  - [ ] Tạo conventional commit message
-  - [ ] Chạy git commit
-  - [ ] Verify commit hash
-
-- [ ] **BƯỚC 3: JIRA TRANSITION**
-  - [ ] Lấy available transitions
-  - [ ] Tìm transition "Done"
-  - [ ] Thực hiện transition
-
-- [ ] **BƯỚC 4: LOG WORK**
-  - [ ] Tạo worklog comment
-  - [ ] Gọi addWorklogToJiraIssue
-
-- [ ] **BƯỚC 5: LESSON CAPTURE**
-  - [ ] Đọc lesson-capture skill
-  - [ ] Thực thi 4-gate framework
-  - [ ] User approve hoặc skip
-
-- [ ] **BƯỚC 6: BÁO CÁO**
-  - [ ] Output tóm tắt kết quả
+- [ ] S0 Intake: ticket, files, time, commit type/scope
+- [ ] S1 Selective staging: git status, stage đúng file, verify staged files
+- [ ] S2 Commit: conventional commit, verify commit hash
+- [ ] S3 Jira transition: fetch transitions, move to Done nếu được
+- [ ] S4 Log work: add worklog với summary + evidence
+- [ ] S5 Lesson capture: run lesson flow, user approve hoặc skip
+- [ ] S6 Publish: summary + report + contract
 ```
 
 ---
 
 ## 📤 Output Contract
 
-Khi hoàn thành task, **BẮT BUỘC** ghi **2 files**:
+Khi hoàn thành task, **bắt buộc** ghi 2 files:
 
 1. Human report: `.claude/pipeline/<PLAN_NAME>/06-close-task.output.md`
 2. Machine contract: `.claude/pipeline/<PLAN_NAME>/06-close-task.output.contract.json`
 
-> Dãy `06-close-task` ở đây là utility artifact numbering cục bộ cho wrapper này.
+> Dãy `06-close-task` là utility artifact numbering cục bộ cho wrapper này.
 > Nó không có nghĩa close-task là step bắt buộc của core canonical delivery loop `01..05`.
 
 **Source of truth cho state sync là file `.output.contract.json`.**
@@ -296,28 +266,28 @@ primary: <git commit hash>
 secondary:
   - <Jira worklog ID nếu có>
 
-## Decision Summary  # tối đa 5 bullets
+## Decision Summary
 - Commit: <hash> — "<message>"
 - Files committed: <N> files
-- Jira: <TICKET-KEY> → Done (hoặc "no ticket")
+- Jira: <TICKET-KEY> -> Done | failed | no ticket
 - Worklog: <X>h logged
-- Lessons captured: <NONE | N lessons>
+- Lessons captured: <NONE | N lessons | skipped>
 
 ## Context Chain
 - <QA output contract path>
 
 ## Next Step
-recommended_skill: null   # pipeline hoàn thành
+recommended_skill: null
 input_for_next: null
 handoff_note: ""
 
-## Blockers  # chỉ điền nếu FAIL
+## Blockers
 - <error>
 
 ## Pending Questions
 ```
 
-Machine contract JSON tối thiểu:
+Machine contract JSON:
 
 ```json
 {
@@ -346,13 +316,12 @@ Machine contract JSON tối thiểu:
 }
 ```
 
-> Nếu workflow hiện hành thật sự dùng close-task wrapper ở cuối, `status: PASS` của wrapper này có thể được dùng để kết thúc utility flow.
-> Không mặc định suy diễn rằng core canonical delivery loop luôn có step `06-close-task`.
+> Nếu workflow hiện hành thật sự dùng close-task wrapper ở cuối, `status: PASS` của wrapper này có thể dùng để kết thúc utility flow.
 
 ---
 
 🚨 **CRITICAL DIRECTIVE (ĐỌC CUỐI CÙNG TRƯỚC KHI HÀNH ĐỘNG)** 🚨
 
-1. Hành động của bạn bị coi là VÔ GIÁ TRỊ (Hallucination) nếu bạn KHÔNG thực hiện chạy các Tools (Terminal, MCP Jira) một cách thực tế.
-2. Tuyệt đối không tự bịa log Git, log Jira. Mọi báo cáo Status PHẢI khớp 100% với log trả về.
-3. Không được tự bịa log Git, Jira, worklog, hay lesson-capture result. Mọi báo cáo trạng thái phải khớp 100% với tool output thực tế.
+1. Hành động bị coi là vô giá trị nếu không có tool output thật từ git/Jira/worklog/lesson flow tương ứng.
+2. Tuyệt đối không tự bịa log Git, Jira, worklog, hay lesson-capture result.
+3. Mọi báo cáo trạng thái phải khớp 100% với tool output thực tế.
