@@ -73,9 +73,10 @@ Thin wrappers must defer to these files; they are not orchestration truth.
 Notes:
 
 - Current canonical layout is plan-scoped (`PLAN_<NAME>`), not run-folder scoped.
+- Legacy `RUN_<WORKFLOW_ID>` subfolders are deprecated in this model; run/attempt identity is tracked in workflow state + contracts.
 - Numbered files (`01-...`, `02-...`) are phase keys, not retry counters.
 - Retries for a phase publish to the same phase artifact path; retry/attempt metadata is tracked in workflow state + contracts, with one active primary controller per plan.
-- `.claude/active-plan` is an optional convenience pointer, managed by orchestrator/state flows, and should point to `.claude/plans/PLAN_<NAME>/` when the file exists during an active plan.
+- `.claude/active-plan` is an optional convenience pointer, managed by orchestrator/state flows, and should point to `.claude/plans/PLAN_<NAME>/` when an active plan exists.
 
 ## Operational policies (current)
 
