@@ -70,7 +70,11 @@ Thin wrappers must defer to these files; they are not orchestration truth.
       05-qa-automation.output.contract.json
 ```
 
-`.claude/active-plan` may exist as a pointer to `.claude/plans/PLAN_<NAME>/`.
+Notes:
+
+- Current canonical layout is plan-scoped (`PLAN_<NAME>`), not run-folder scoped.
+- Multiple attempts/retries are tracked in workflow state + output contracts, with one active primary controller per plan.
+- `.claude/active-plan` is an optional convenience pointer, managed by orchestrator/state flows, and should point to `.claude/plans/PLAN_<NAME>/` when present.
 
 ## Operational policies (current)
 
