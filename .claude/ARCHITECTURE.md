@@ -74,8 +74,7 @@ Notes:
 
 - Current canonical layout is plan-scoped (`PLAN_<NAME>`), not run-folder scoped.
 - Numbered files (`01-...`, `02-...`) are phase keys, not retry counters.
-- Retries for a phase publish to the same phase artifact path; retry/attempt metadata is tracked in workflow state + contracts.
-- Multiple attempts/retries are tracked in workflow state + output contracts, with one active primary controller per plan.
+- Retries for a phase publish to the same phase artifact path; retry/attempt metadata is tracked in workflow state + contracts, with one active primary controller per plan.
 - `.claude/active-plan` is an optional convenience pointer, managed by orchestrator/state flows, and should point to `.claude/plans/PLAN_<NAME>/` when the file exists during an active plan.
 
 ## Operational policies (current)
