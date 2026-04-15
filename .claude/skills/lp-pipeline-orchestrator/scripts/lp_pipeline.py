@@ -562,6 +562,35 @@ def extract_review_validation_summary(contract: dict[str, Any]) -> dict[str, Any
     }
 
 
+def request_implementation_rework(conn, workflow_id: str, actor: str, requested_by: str, trigger_status: str) -> None:
+    sm.set_gate(
+        conn,
+        argparse.Namespace(
+            workflow_id=workflow_id,
+            gate='implementation_done',
+            value='false',
+            actor=actor,
+            include_events=False,
+        ),
+    )
+    sm.upsert_step(
+        conn,
+        argparse.Namespace(
+            workflow_id=workflow_id,
+            step='implement-plan',
+            order=None,
+            status='PENDING',
+            output=None,
+            started_at=None,
+            completed_at=None,
+            metadata_json=json.dumps({'rework_requested_by': requested_by, 'trigger_status': trigger_status}),
+            workflow_status=None,
+            actor=actor,
+            include_events=False,
+        ),
+    )
+
+
 def sync_gates_for_skill(conn, workflow_id: str, skill: str, status: str, actor: str, contract: dict[str, Any] | None = None) -> None:
     snapshot = sm.get_workflow_snapshot(conn, workflow_id, include_events=False)
     delivery_loop_patch = build_delivery_loop_metadata_patch(snapshot, skill, status, contract)
@@ -699,7 +728,7 @@ def sync_gates_for_skill(conn, workflow_id: str, skill: str, status: str, actor:
                 ),
             )
         elif status == 'FAIL':
-            sm.set_gate(conn, argparse.Namespace(workflow_id=workflow_id, gate='implementation_done', value='false', actor=actor, include_events=False))
+            request_implementation_rework(conn, workflow_id, actor, 'implement-plan', status)
             sm.update_workflow(
                 conn,
                 argparse.Namespace(
@@ -820,23 +849,7 @@ def sync_gates_for_skill(conn, workflow_id: str, skill: str, status: str, actor:
                 ),
             )
         elif status == 'NEEDS_REVISION':
-            sm.set_gate(conn, argparse.Namespace(workflow_id=workflow_id, gate='implementation_done', value='false', actor=actor, include_events=False))
-            sm.upsert_step(
-                conn,
-                argparse.Namespace(
-                    workflow_id=workflow_id,
-                    step='implement-plan',
-                    order=None,
-                    status='PENDING',
-                    output=None,
-                    started_at=None,
-                    completed_at=None,
-                    metadata_json=json.dumps({'rework_requested_by': 'review-implement', 'trigger_status': status}),
-                    workflow_status=None,
-                    actor=actor,
-                    include_events=False,
-                ),
-            )
+            request_implementation_rework(conn, workflow_id, actor, 'review-implement', status)
             sm.update_workflow(
                 conn,
                 argparse.Namespace(
@@ -852,23 +865,7 @@ def sync_gates_for_skill(conn, workflow_id: str, skill: str, status: str, actor:
                 ),
             )
         elif status == 'FAIL':
-            sm.set_gate(conn, argparse.Namespace(workflow_id=workflow_id, gate='implementation_done', value='false', actor=actor, include_events=False))
-            sm.upsert_step(
-                conn,
-                argparse.Namespace(
-                    workflow_id=workflow_id,
-                    step='implement-plan',
-                    order=None,
-                    status='PENDING',
-                    output=None,
-                    started_at=None,
-                    completed_at=None,
-                    metadata_json=json.dumps({'rework_requested_by': 'review-implement', 'trigger_status': status}),
-                    workflow_status=None,
-                    actor=actor,
-                    include_events=False,
-                ),
-            )
+            request_implementation_rework(conn, workflow_id, actor, 'review-implement', status)
             sm.update_workflow(
                 conn,
                 argparse.Namespace(
@@ -904,23 +901,7 @@ def sync_gates_for_skill(conn, workflow_id: str, skill: str, status: str, actor:
             )
         elif status == 'FAIL':
             sm.set_gate(conn, argparse.Namespace(workflow_id=workflow_id, gate='qa_passed', value='false', actor=actor, include_events=False))
-            sm.set_gate(conn, argparse.Namespace(workflow_id=workflow_id, gate='implementation_done', value='false', actor=actor, include_events=False))
-            sm.upsert_step(
-                conn,
-                argparse.Namespace(
-                    workflow_id=workflow_id,
-                    step='implement-plan',
-                    order=None,
-                    status='PENDING',
-                    output=None,
-                    started_at=None,
-                    completed_at=None,
-                    metadata_json=json.dumps({'rework_requested_by': 'qa-automation', 'trigger_status': status}),
-                    workflow_status=None,
-                    actor=actor,
-                    include_events=False,
-                ),
-            )
+            request_implementation_rework(conn, workflow_id, actor, 'qa-automation', status)
             sm.update_workflow(
                 conn,
                 argparse.Namespace(
