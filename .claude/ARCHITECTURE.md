@@ -23,9 +23,9 @@ Compatibility wrappers (non-canonical): `/lp-plan`, `/lp-implement`, `/lp-cook`.
 
 ## Source-of-truth hierarchy
 
-1. `/home/runner/work/vibecode/vibecode/.claude/skills/lp-pipeline-orchestrator/SKILL.md`
-2. `/home/runner/work/vibecode/vibecode/.claude/skills/lp-state-manager/SKILL.md`
-3. `/home/runner/work/vibecode/vibecode/.claude/commands/lp:index.md`
+1. `.claude/skills/lp-pipeline-orchestrator/SKILL.md`
+2. `.claude/skills/lp-state-manager/SKILL.md`
+3. `.claude/commands/lp:index.md`
 
 Thin wrappers must defer to these files; they are not orchestration truth.
 

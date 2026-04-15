@@ -26,9 +26,9 @@ Utility wrappers:
 
 ## Source of truth
 
-- Command index: `/home/runner/work/vibecode/vibecode/.claude/commands/lp:index.md`
-- Orchestrator: `/home/runner/work/vibecode/vibecode/.claude/skills/lp-pipeline-orchestrator/SKILL.md`
-- State backbone: `/home/runner/work/vibecode/vibecode/.claude/skills/lp-state-manager/SKILL.md`
+- Command index: `.claude/commands/lp:index.md`
+- Orchestrator: `.claude/skills/lp-pipeline-orchestrator/SKILL.md`
+- State backbone: `.claude/skills/lp-state-manager/SKILL.md`
 
 ## Documentation notes
 
