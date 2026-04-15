@@ -65,6 +65,36 @@ python .claude/skills/lp-state-manager/scripts/state_manager.py upsert-step \
   --output .claude/pipeline/PLAN_MERCHANT_BULK_IMPORT/01-create-plan.output.md
 ```
 
+#### Correct examples
+
+```bash
+python .claude/skills/lp-state-manager/scripts/state_manager.py \
+  --db-path ".claude/state/pipeline_state.db" \
+  upsert-step \
+  --workflow-id "WF_20260409_000001" \
+  --step "review-implement" \
+  --order 4 \
+  --status FAIL \
+  --output ".claude/pipeline/PLAN_MERCHANT_BULK_IMPORT/04-review-implement.output.md"
+```
+
+#### Wrong examples
+
+```text
+--step-id   # invalid flag
+--db        # invalid flag
+--workflow  # invalid flag
+```
+
+Dùng `python .claude/skills/lp-state-manager/scripts/state_manager.py upsert-step --example` để in example canonical mới nhất.
+
+Trước khi gọi command ghi state:
+- verify DB path canonical
+- chạy `--help` nếu flags chưa được verify trong repo hiện tại
+- không dùng path suy đoán nếu chưa đọc manifest/source-of-truth hiện hành
+
+Dùng `python .claude/skills/lp-state-manager/scripts/state_manager.py --print-examples` để xem examples machine-friendly cho các command chính.
+
 ### 5) Cập nhật gate
 
 ```bash

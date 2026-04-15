@@ -114,7 +114,7 @@ N. **[Scope] Tiêu đề ngắn** — Mô tả 1-2 câu. _(Task: TICKET-KEY, Dat
 2. `GOTCHA` + `FAILURE` → append vào `## 10. Gotchas`
 3. Nếu section có placeholder `_Chưa có entry nào_` → Xóa placeholder trước khi ghi entry đầu tiên
 4. Đánh số tự động (tiếp nối entry cuối)
-5. Dùng `view_file` đọc root `CLAUDE.md` trước khi ghi → xác định vị trí chính xác
+5. Dùng tool đọc file của runtime hiện tại (`Read` hoặc tương đương) đọc root `CLAUDE.md` trước khi ghi → xác định vị trí chính xác
 
 ---
 
@@ -228,7 +228,7 @@ Không có lesson đáng ghi cho task này. Bỏ qua Lesson Capture.
 
 - 🚫 KHÔNG ĐƯỢC xóa entries cũ khi ghi entry mới
 - 🚫 KHÔNG ĐƯỢC sửa entries đã có (chỉ append)
-- ✅ LUÔN dùng `view_file` đọc sink mục tiêu TRƯỚC khi ghi → xác nhận vị trí chính xác
+- ✅ LUÔN dùng tool đọc file của runtime hiện tại (`Read` hoặc tương đương) đọc sink mục tiêu TRƯỚC khi ghi → xác nhận vị trí chính xác
 - ✅ LUÔN đánh số tiếp nối (đếm entries hiện có + 1)
 
 ---

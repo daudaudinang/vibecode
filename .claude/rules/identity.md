@@ -19,7 +19,7 @@ Khi tôi sử dụng các commands bắt đầu bằng `/` (như /create-plan, /
 
 ### 1.1. TRUST BUT VERIFY (Không tin vào trí nhớ)
 - TUYỆT ĐỐI KHÔNG tự sửa/tạo code dựa vào trí nhớ từ lịch sử trò chuyện.
-- TRƯỚC KHI dùng các lệnh edit (`replace_file_content`, `multi_replace_file_content`), BẮT BUỘC phải dùng `view_file` hoặc `grep_search` để soi lại code thực tế lấy chính xác text/line cần thay.
+- TRƯỚC KHI dùng các lệnh edit, BẮT BUỘC phải dùng tool đọc/tìm kiếm code thực tế (`Read`, `Grep`, hoặc tương đương của runtime hiện tại) để soi lại text/line cần thay.
 
 ### 1.2. CHỐNG LƯỜI (NO PLACEHOLDERS)
 - Nghiêm cấm sử dụng các cụm từ rút gọn như `// ... existing code ...`, `// ... keep as is ...` khi edit code. Phải output đoạn ReplacementChunk hoàn chỉnh, chuẩn xác 100%.
@@ -36,14 +36,36 @@ Khi tôi sử dụng các commands bắt đầu bằng `/` (như /create-plan, /
 
 ### 1.5. KÍCH HOẠT SKILL / COMMAND (ANTI-HALLUCINATION PROTOCOL)
 - Khi tôi gõ một lệnh `/command` (VD: `/review-implement`, `/debug`, `/create-plan`), TUYỆT ĐỐI KHÔNG được tự ý thực thi dựa vào trí nhớ hoặc tài liệu có sẵn trong lịch sử chat.
-- BẮT BUỘC bạn phải giả vờ như "bị mất trí nhớ" về code. THAO TÁC ĐẦU TIÊN CỦA BẠN PHẢI LÀ gọi tool `view_file` để đọc nội dung file hướng dẫn tương ứng (`SKILL.md`) và file code thực tế.
-- Mọi bài Review/Debug/Plan sinh ra mà KHÔNG có log gọi tool `view_file` đều bị coi là lừa dối và bị CẤM nghiêm ngặt. HÃY DÙNG TOOL TRƯỚC KHI GENERATE BẤT KỲ TEXT NÀO.
+- BẮT BUỘC phải đọc nội dung file hướng dẫn tương ứng (`SKILL.md`) và file/code/artifact thực tế bằng tool đọc phù hợp của runtime hiện tại (`Read` hoặc tương đương) trước khi kết luận hay sửa code.
+- Mọi bài Review/Debug/Plan sinh ra mà KHÔNG có evidence từ tool đọc/tìm kiếm thực tế đều bị coi là lừa dối và bị CẤM nghiêm ngặt. HÃY DÙNG TOOL TRƯỚC KHI GENERATE BẤT KỲ TEXT NÀO.
 
-### 1.6. TOOL STRATEGY (GitNexus-First)
-- Khi cần tìm hiểu codebase:
-  1. **Ưu tiên 1:** GitNexus MCP tools (`mcp_gitnexus_query`, `mcp_gitnexus_context`, `mcp_gitnexus_impact`)
-  2. **Ưu tiên 2:** `grep_search` + `view_file` — fallback khi GitNexus không available
-- Trước khi dùng GitNexus, kiểm tra `mcp_gitnexus_list_repos`. Nếu không available → dùng fallback, KHÔNG báo lỗi.
+### 1.6. TOOL STRATEGY (GitNexus Mandatory With Bootstrap)
+- Khi cần tìm hiểu codebase, mặc định coi GitNexus là capability chính để giảm token, giảm grep/read thủ công, và cải thiện impact analysis/navigation.
+- Trình tự đúng là: **detect GitNexus config/capability → bootstrap nếu thiếu → verify usable → dùng GitNexus**.
+- Không được bỏ qua GitNexus chỉ vì task nhỏ. Chỉ chuyển sang fallback `Grep` + `Read` (và `Glob` khi cần) khi một trong các điều kiện sau xảy ra:
+  1. GitNexus bootstrap fail
+  2. runtime/session không expose capability cần thiết
+  3. repo không query được sau bước verify
+  4. GitNexus không đủ thông tin cho câu hỏi hiện tại
+- Nếu phải fallback, phải nói rõ đang ở degraded mode và nêu lý do fallback; không được im lặng bỏ qua GitNexus.
+- Không được giả định tên tool/capability cụ thể chỉ dựa trên docs. Phải kiểm tra capability thực tế của session/repo trước khi dùng, nhưng mục tiêu là đưa GitNexus về trạng thái usable thay vì bỏ qua.
+
+### 1.6.1. OPERATIONAL GUARDRAILS FOR PROJECT-SPECIFIC CLI
+- Trước khi gọi project-specific CLI lần đầu trong repo hiện tại, chạy `--help` nếu command/flags chưa được verify trong chính repo đó.
+- Nếu command ghi state, verify rõ DB path canonical trước khi gọi.
+- Nếu command ghi/đọc contract, đọc validator hoặc artifact passing mẫu trước khi gọi.
+- Nếu skill/script path có thể mơ hồ giữa nhiều runtime roots, resolve canonical path manifest trước rồi mới thao tác.
+- Không gọi command ghi state/contract bằng path suy đoán nếu chưa verify source of truth hiện hành.
+
+### 1.6.2. SOURCE OF TRUTH RESOLUTION
+- Ưu tiên runtime root canonical duy nhất khi repo đã khai báo rõ.
+- Nếu repo có cả `.claude/`, `.agents/`, `.cursor/`, `.codex/`, phải tìm manifest/lock/canonical-path doc trước khi dùng.
+- Không được trộn nhiều runtime roots trong cùng một run trừ khi manifest explicit cho phép.
+
+### 1.6.3. GITNEXUS READY/DEGRADED STATES
+- `READY`: GitNexus usable cho repo hiện tại sau detect/bootstrap/verify.
+- `DEGRADED`: GitNexus unavailable hoặc insufficient sau khi đã thử bootstrap/verify; lúc này mới dùng fallback read/search path.
+- Runtime instructions phải surface rõ state hiện tại thay vì để assistant tự ngầm đoán.
 
 ### 1.7. DETERMINISTIC SCORING
 - Khi skill yêu cầu tính toán điểm, BẮT BUỘC dùng `scripts/score_calculator.py` nếu skill có cung cấp.
@@ -96,7 +118,7 @@ Khi đã thử fix lỗi **3 lần** mà error vẫn không hết:
 | Thêm feature | Test/verify command chạy thành công |
 | Refactor | Lint pass + existing tests vẫn pass |
 | Config change | Service restart thành công + behavior đúng |
-| Sửa file plan/docs | `view_file` xác nhận nội dung đã cập nhật đúng |
+| Sửa file plan/docs | `Read` (hoặc tool đọc file tương đương của runtime hiện tại) xác nhận nội dung đã cập nhật đúng |
 
 **Nếu KHÔNG có evidence → KHÔNG ĐƯỢC mark task done.**
 

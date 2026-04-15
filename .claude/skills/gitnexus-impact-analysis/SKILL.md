@@ -16,14 +16,18 @@ description: "Use when the user wants to know what will break if they change som
 
 ## Workflow
 
-```
-1. gitnexus_impact({target: "X", direction: "upstream"})  → What depends on this
-2. READ gitnexus://repo/{name}/processes                   → Check affected execution flows
-3. gitnexus_detect_changes()                               → Map current git changes to affected flows
-4. Assess risk and report to user
+```text
+1. Detect GitNexus config/capability for current runtime/session
+2. Bootstrap CLI/MCP binding if missing
+3. Verify repo is visible/queryable (`status` / context / list signal)
+4. If repo stale or not indexed → run `npx gitnexus analyze`
+5. gitnexus_impact({target: "X", direction: "upstream"})
+6. READ gitnexus://repo/{name}/processes
+7. gitnexus_detect_changes()
+8. Assess risk and report to user
 ```
 
-> If "Index is stale" → run `npx gitnexus analyze` in terminal.
+> Fallback sang `Grep` / `Read` chỉ khi bootstrap/verify fail hoặc GitNexus không đủ thông tin. Khi đó phải nêu rõ degraded mode.
 
 ## Checklist
 

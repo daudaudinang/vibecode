@@ -7,6 +7,34 @@ description: "Use when the user needs to run GitNexus CLI commands like analyze/
 
 All commands work via `npx` — no global install required.
 
+## Bootstrap-first policy
+
+Trong Vibecode, GitNexus là core capability mặc định. Trước khi fallback sang `Grep`/`Read`, flow chuẩn là:
+
+1. Detect config/capability
+2. Nếu thiếu → bootstrap CLI/MCP binding
+3. Verify command chạy được
+4. Run `analyze`
+5. Verify repo visible/queryable
+6. Chỉ fallback nếu bootstrap/verify fail hoặc GitNexus thiếu thông tin
+
+Doctor/reference files:
+
+```bash
+python .claude/scripts/vibecode_doctor.py
+cat .claude/manifest.json
+```
+
+## Suggested bootstrap flow
+
+```bash
+npx gitnexus status
+npx gitnexus analyze
+npx gitnexus list
+```
+
+Nếu runtime dùng MCP, verify thêm repo đã visible qua MCP/resource tương ứng trước khi bắt đầu query sâu.
+
 ## Commands
 
 ### analyze — Build or refresh the index

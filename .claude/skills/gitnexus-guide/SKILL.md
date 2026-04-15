@@ -11,11 +11,48 @@ Quick reference for all GitNexus MCP tools, resources, and the knowledge graph s
 
 For any task involving code understanding, debugging, impact analysis, or refactoring:
 
-1. **Read `gitnexus://repo/{name}/context`** — codebase overview + check index freshness
-2. **Match your task to a skill below** and **read that skill file**
-3. **Follow the skill's workflow and checklist**
+1. **Detect GitNexus config/capability** for current runtime/session
+2. **Bootstrap GitNexus if needed** (CLI/package, MCP binding, verify command)
+3. **Run analyze / prepare index** so repo becomes queryable
+4. **Verify ready state** using context/status/list signal
+5. **Only then** read `gitnexus://repo/{name}/context` and follow the relevant skill
 
-> If step 1 warns the index is stale, run `npx gitnexus analyze` in the terminal first.
+> Fallback to `Grep`/`Read` only when bootstrap/verify fails or GitNexus is insufficient for the question. In that case, say clearly that degraded mode is active.
+
+## Bootstrap Contract
+
+```text
+Detect GitNexus config
+    ↓
+Check MCP/tool availability
+    ↓
+If missing:
+  - install package / CLI
+  - setup MCP binding
+  - verify command works
+    ↓
+Run analyze
+    ↓
+Mark status = ready
+    ↓
+Expose clear fallback only if bootstrap fail
+```
+
+## Ready vs degraded
+
+- `READY`: GitNexus usable for current repo after detect/bootstrap/verify
+- `DEGRADED`: bootstrap failed, capability unavailable, repo not queryable, or GitNexus insufficient
+- Do not silently skip GitNexus when repo policy says GitNexus is core capability
+
+## Doctor
+
+Use Vibecode doctor to inspect canonical root, active DB path, GitNexus readiness, and fallback state:
+
+```bash
+python .claude/scripts/vibecode_doctor.py
+```
+
+Read `.claude/manifest.json` before resolving canonical roots or runtime paths.
 
 ## Skills
 

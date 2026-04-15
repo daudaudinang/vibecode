@@ -15,14 +15,18 @@ description: "Use when the user wants to rename, extract, split, move, or restru
 
 ## Workflow
 
-```
-1. gitnexus_impact({target: "X", direction: "upstream"})  → Map all dependents
-2. gitnexus_query({query: "X"})                            → Find execution flows involving X
-3. gitnexus_context({name: "X"})                           → See all incoming/outgoing refs
-4. Plan update order: interfaces → implementations → callers → tests
+```text
+1. Detect GitNexus config/capability for current runtime/session
+2. Bootstrap CLI/MCP binding if missing
+3. Verify repo is visible/queryable (`status` / context / list signal)
+4. If repo stale or not indexed → run `npx gitnexus analyze`
+5. gitnexus_impact({target: "X", direction: "upstream"})
+6. gitnexus_query({query: "X"})
+7. gitnexus_context({name: "X"})
+8. Plan update order: interfaces → implementations → callers → tests
 ```
 
-> If "Index is stale" → run `npx gitnexus analyze` in terminal.
+> Fallback sang `Grep` / `Read` chỉ khi bootstrap/verify fail hoặc GitNexus không đủ thông tin. Khi đó phải nêu rõ degraded mode.
 
 ## Checklists
 

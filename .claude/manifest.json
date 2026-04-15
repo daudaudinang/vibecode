@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "runtime_model": "global-source-package",
+  "canonical_runtime_root": ".claude",
+  "legacy_runtime_roots": [".agents", ".cursor", ".codex"],
+  "source_of_truth": {
+    "claude_guidance": ".claude/CLAUDE.md",
+    "lp_command_index": ".claude/commands/lp:index.md",
+    "lp_pipeline_orchestrator": ".claude/skills/lp-pipeline-orchestrator/SKILL.md",
+    "lp_state_manager": ".claude/skills/lp-state-manager/SKILL.md",
+    "rules_dir": ".claude/rules"
+  },
+  "active_scripts": {
+    "lp_pipeline": ".claude/skills/lp-pipeline-orchestrator/scripts/lp_pipeline.py",
+    "validate_contract": ".claude/skills/lp-pipeline-orchestrator/scripts/validate_contract.py",
+    "state_manager": ".claude/skills/lp-state-manager/scripts/state_manager.py",
+    "vibecode_doctor": ".claude/scripts/vibecode_doctor.py"
+  },
+  "active_runtime": {
+    "state_db": ".claude/state/pipeline_state.db",
+    "pipeline_root": ".claude/pipeline",
+    "plans_root": ".claude/plans"
+  },
+  "capabilities": {
+    "gitnexus": {
+      "mode": "mandatory_with_bootstrap",
+      "bootstrap_order": [
+        "detect_config",
+        "check_mcp_or_cli",
+        "bootstrap_if_missing",
+        "analyze_repo",
+        "verify_ready",
+        "fallback_if_failed"
+      ],
+      "fallback_policy": "fallback_only_when_bootstrap_fails_or_information_is_insufficient"
+    }
+  }
+}

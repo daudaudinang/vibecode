@@ -22,6 +22,13 @@ Root resolution policy:
 - fallback sang git root của cwd hiện tại
 - nếu vẫn không suy ra được thì fail rõ ràng
 
+## Operational guardrails
+
+Before calling any project-specific CLI:
+1. Run `--help` nếu command/flags chưa được verify trong chính repo hiện tại.
+2. Nếu command ghi state, verify rõ DB path canonical trước khi gọi.
+3. Nếu command ghi contract, đọc validator hoặc passing artifact mẫu trước khi gọi.
+4. Nếu skill path có thể mơ hồ, resolve `.claude/manifest.json` trước rồi mới thao tác.
 
 ### Workspace / writer policy
 
@@ -86,6 +93,29 @@ python .claude/skills/lp-pipeline-orchestrator/scripts/lp_pipeline.py sync-outpu
   --contract-file .claude/pipeline/PLAN_MERCHANT_BULK_IMPORT/01-create-plan.output.contract.json \
   --plan-file .claude/plans/PLAN_MERCHANT_BULK_IMPORT/plan.md
 ```
+
+#### Correct examples
+
+```bash
+python .claude/skills/lp-pipeline-orchestrator/scripts/lp_pipeline.py next \
+  --workflow-id WF_20260409_000001
+```
+
+```bash
+python .claude/skills/lp-pipeline-orchestrator/scripts/validate_contract.py \
+  .claude/pipeline/PLAN_MERCHANT_BULK_IMPORT/04-review-implement.output.contract.json
+```
+
+#### Wrong examples
+
+```text
+--step-id   # invalid for lp_pipeline.py next
+--db        # invalid short alias here
+sync-output without validator/artifact awareness for contract-writing flows
+```
+
+Dùng `python .claude/skills/lp-pipeline-orchestrator/scripts/lp_pipeline.py --print-examples` để xem examples canonical mới nhất.
+Dùng `python .claude/skills/lp-pipeline-orchestrator/scripts/validate_contract.py --print-schema` để in schema validator hiện hành.
 
 ### `next`
 

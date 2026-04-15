@@ -16,6 +16,10 @@ from typing import Any
 
 DEFAULT_DB_PATH_RELATIVE = Path('.claude/state/pipeline_state.db')
 VALID_MODES = {'plan', 'implement', 'cook', 'debug'}
+STATE_MANAGER_EXAMPLES = {
+    'upsert-step': "python .claude/skills/lp-state-manager/scripts/state_manager.py --db-path \".claude/state/pipeline_state.db\" upsert-step --workflow-id \"WF_20260409_000001\" --step \"review-implement\" --order 4 --status FAIL --output \".claude/pipeline/PLAN_MERCHANT_BULK_IMPORT/04-review-implement.output.md\"",
+    'resolve-next': "python .claude/skills/lp-state-manager/scripts/state_manager.py resolve-next --workflow-id \"WF_20260409_000001\"",
+}
 VALID_WORKFLOW_STATUSES = {'ACTIVE', 'WAITING_USER', 'COMPLETED', 'FAILED', 'BLOCKED'}
 VALID_STEP_STATUSES = {'PENDING', 'RUNNING', 'PASS', 'FAIL', 'NEEDS_REVISION', 'WAITING_USER', 'SKIPPED'}
 PHASE_BY_STEP = {
@@ -1705,8 +1709,13 @@ def print_json(payload: Any) -> None:
     sys.stdout.write('\n')
 
 
+def print_examples() -> None:
+    print_json({'examples': STATE_MANAGER_EXAMPLES})
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description='SQLite-backed workflow state manager for LittlePea pipeline.')
+    parser.add_argument('--print-examples', action='store_true', help='Print machine-friendly command examples and exit')
     parser.add_argument(
         '--db-path',
         help='Explicit path to SQLite DB file. If omitted, resolve to <repo-root>/.claude/state/pipeline_state.db',
@@ -1761,6 +1770,7 @@ def build_parser() -> argparse.ArgumentParser:
     update.set_defaults(handler=update_workflow)
 
     upsert = subparsers.add_parser('upsert-step')
+    upsert.add_argument('--example', action='store_true', help='Print canonical example for this command and exit')
     upsert.add_argument('--workflow-id', required=True)
     upsert.add_argument('--step', required=True)
     upsert.add_argument('--order', type=int)
@@ -1826,8 +1836,16 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    argv = sys.argv[1:]
+    if '--print-examples' in argv:
+        print_examples()
+        return 0
+    if argv and argv[0] == 'upsert-step' and '--example' in argv[1:]:
+        print_json({'command': 'upsert-step', 'example': STATE_MANAGER_EXAMPLES['upsert-step']})
+        return 0
+
     parser = build_parser()
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     try:
         db_path = resolve_db_path(db_path_arg=args.db_path, repo_root_arg=args.repo_root)

@@ -15,14 +15,18 @@ description: "Use when the user is debugging a bug, tracing an error, or asking 
 
 ## Workflow
 
-```
-1. gitnexus_query({query: "<error or symptom>"})            → Find related execution flows
-2. gitnexus_context({name: "<suspect>"})                    → See callers/callees/processes
-3. READ gitnexus://repo/{name}/process/{name}                → Trace execution flow
-4. gitnexus_cypher({query: "MATCH path..."})                 → Custom traces if needed
+```text
+1. Detect GitNexus config/capability for current runtime/session
+2. Bootstrap CLI/MCP binding if missing
+3. Verify repo is visible/queryable (`status` / context / list signal)
+4. If repo stale or not indexed → run `npx gitnexus analyze`
+5. gitnexus_query({query: "<error or symptom>"})
+6. gitnexus_context({name: "<suspect>"})
+7. READ gitnexus://repo/{name}/process/{name}
+8. gitnexus_cypher({query: "MATCH path..."}) if needed
 ```
 
-> If "Index is stale" → run `npx gitnexus analyze` in terminal.
+> Fallback sang `Grep` / `Read` chỉ khi bootstrap/verify fail hoặc GitNexus không đủ thông tin. Khi đó phải nêu rõ degraded mode.
 
 ## Checklist
 

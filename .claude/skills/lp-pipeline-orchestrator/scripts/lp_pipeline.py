@@ -14,6 +14,10 @@ from typing import Any
 SCRIPT_ROOT = Path(__file__).resolve().parents[4]
 STATE_MANAGER_PATH = SCRIPT_ROOT / '.claude/skills/lp-state-manager/scripts/state_manager.py'
 CONTRACT_VALIDATOR_PATH = SCRIPT_ROOT / '.claude/skills/lp-pipeline-orchestrator/scripts/validate_contract.py'
+LP_PIPELINE_EXAMPLES = {
+    'next': "python .claude/skills/lp-pipeline-orchestrator/scripts/lp_pipeline.py next --workflow-id \"WF_20260409_000001\"",
+    'sync-output': "python .claude/skills/lp-pipeline-orchestrator/scripts/lp_pipeline.py sync-output --workflow-id WF_20260409_000001 --output-file .claude/pipeline/PLAN_MERCHANT_BULK_IMPORT/01-create-plan.output.md --contract-file .claude/pipeline/PLAN_MERCHANT_BULK_IMPORT/01-create-plan.output.contract.json --plan-file .claude/plans/PLAN_MERCHANT_BULK_IMPORT/plan.md",
+}
 
 
 def load_state_manager():
@@ -69,6 +73,10 @@ UNCERTAIN_SIGNAL_KEYWORDS = (
 def print_json(payload: Any) -> None:
     json.dump(payload, sys.stdout, ensure_ascii=False, indent=2)
     sys.stdout.write('\n')
+
+
+def print_examples() -> None:
+    print_json({'examples': LP_PIPELINE_EXAMPLES})
 
 
 def coerce_bool(value: Any) -> bool:
@@ -1237,6 +1245,7 @@ def compute_delivery_next(snapshot: dict[str, Any]) -> dict[str, Any]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description='High-level LP pipeline orchestration helpers.')
+    parser.add_argument('--print-examples', action='store_true', help='Print machine-friendly command examples and exit')
     parser.add_argument(
         '--db-path',
         help='Explicit path to SQLite DB file. If omitted, resolve to <repo-root>/.claude/state/pipeline_state.db',
@@ -1336,8 +1345,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    argv = sys.argv[1:]
+    if '--print-examples' in argv:
+        print_examples()
+        return 0
+
     parser = build_parser()
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     try:
         db_path = resolve_db_path(args)
         with sm.connect(db_path) as conn:

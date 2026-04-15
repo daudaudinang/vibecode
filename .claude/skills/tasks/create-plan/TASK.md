@@ -64,14 +64,19 @@ Sinh plan triển khai chi tiết, actionable từ yêu cầu của user, đảm
 
 ---
 
-## Bước 0.5: 🔄 Ensure GitNexus Index
+## Bước 0.5: 🔄 Ensure GitNexus Ready
 
-> **Mục đích:** Đảm bảo code knowledge graph luôn fresh trước khi truy vấn.
-> Mất ~5-10s nhưng tiết kiệm nhiều token khi query codebase so với grep.
+> **Mục đích:** Đưa GitNexus về trạng thái usable mặc định trước khi khám phá codebase, vì đây là capability chính để giảm token và tăng độ chính xác.
 
-1. Kiểm tra GitNexus MCP có available không (tool `mcp_gitnexus_query`).
-2. **Nếu có** → Chạy `npx gitnexus analyze` tại project root (LUÔN CHẠY để đảm bảo index mới nhất, không tự ý skip). Ghi nhận `HAS_GITNEXUS = true`.
-3. **Nếu không** → Ghi nhận `HAS_GITNEXUS = false`, sử dụng `Grep` / `Read` / `Glob` làm fallback.
+1. Detect GitNexus config/capability trong runtime/session hiện tại.
+2. Nếu capability chưa sẵn sàng:
+   - kiểm tra CLI/package có mặt chưa
+   - bootstrap/install/setup binding cần thiết theo môi trường hiện tại
+   - verify command cơ bản chạy được
+3. Khi bootstrap xong, chạy bước prepare index phù hợp (ví dụ `npx gitnexus analyze`) để repo queryable.
+4. Verify repo đã usable bằng context/status/list phù hợp. Nếu verify pass → ghi nhận `HAS_GITNEXUS = true`.
+5. Chỉ khi bootstrap/verify fail, hoặc GitNexus không đủ thông tin cho task hiện tại, mới ghi nhận `HAS_GITNEXUS = false` và chuyển sang fallback `Grep` / `Read` / `Glob`. Khi đó phải nêu rõ đang ở degraded mode và vì sao fallback.
+6. Không được bỏ qua GitNexus chỉ vì task nhỏ.
 
 ---
 
@@ -100,7 +105,7 @@ Sinh plan triển khai chi tiết, actionable từ yêu cầu của user, đảm
 
 1. **Tìm files/modules liên quan** bằng các tools:
 
-   **Nếu `HAS_GITNEXUS = true` (Ưu tiên):**
+   **Nếu `HAS_GITNEXUS = true` (Mặc định):**
    - `gitnexus_query` — tìm execution flows và processes liên quan đến feature
    - `gitnexus_context` — xem 360° của 1 symbol (callers, callees, imports, processes)
    - `gitnexus_impact` — phân tích blast radius của thay đổi

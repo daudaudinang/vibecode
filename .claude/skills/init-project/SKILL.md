@@ -37,6 +37,13 @@ Tạo một bản tóm tắt context bám repo thực tế bằng cách đọc:
 - command catalog
 - skills/rules trong `.claude/`
 - config files thực tế (`package.json`, `pyproject.toml`, `tsconfig.json`, v.v.) nếu có
+- canonical runtime manifest `.claude/manifest.json` nếu repo đã khai báo
+
+Nếu user đang gặp lỗi tooling/bootstrap, skill này nên nhắc kiểm tra doctor trước:
+
+```bash
+python .claude/scripts/vibecode_doctor.py
+```
 
 ### Output ưu tiên
 

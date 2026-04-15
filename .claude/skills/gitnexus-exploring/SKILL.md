@@ -15,15 +15,18 @@ description: "Use when the user asks how code works, wants to understand archite
 
 ## Workflow
 
-```
-1. READ gitnexus://repos                          → Discover indexed repos
-2. READ gitnexus://repo/{name}/context             → Codebase overview, check staleness
-3. gitnexus_query({query: "<what you want to understand>"})  → Find related execution flows
-4. gitnexus_context({name: "<symbol>"})            → Deep dive on specific symbol
-5. READ gitnexus://repo/{name}/process/{name}      → Trace full execution flow
+```text
+1. Detect GitNexus config/capability for current runtime/session
+2. Bootstrap CLI/MCP binding if missing
+3. Verify repo is visible/queryable (`status` / context / list signal)
+4. If repo stale or not indexed → run `npx gitnexus analyze`
+5. READ gitnexus://repo/{name}/context
+6. gitnexus_query({query: "<what you want to understand>"})
+7. gitnexus_context({name: "<symbol>"})
+8. READ gitnexus://repo/{name}/process/{name}
 ```
 
-> If step 2 says "Index is stale" → run `npx gitnexus analyze` in terminal.
+> Fallback sang `Grep` / `Read` chỉ khi bootstrap/verify fail hoặc GitNexus không đủ thông tin. Khi đó phải nêu rõ degraded mode.
 
 ## Checklist
 

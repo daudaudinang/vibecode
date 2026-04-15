@@ -61,11 +61,17 @@ Quy tắc canonical: package plan nằm tại `.claude/plans/PLAN_<NAME>/`; file
    - **Context Sharding (Tier L/P)**: Nếu plan là Tier L/P và đã chia nhỏ thành phase files trong package plan canonical, ghi chú lại danh sách phase files tương ứng. Trong quá trình chạy, đọc phase file liên quan khi vào từng phase thay vì nạp toàn bộ package một lúc.
    - Các phases, tasks.
 
-### 0.2. 🔄 Ensure GitNexus Index
+### 0.2. 🔄 Ensure GitNexus Ready
 
-1. Kiểm tra GitNexus MCP tool có available không.
-2. **Nếu có** → Chạy `npx gitnexus analyze` tại project root (LUÔN CHẠY để đảm bảo index mới nhất, không tự ý skip). Ghi nhận `HAS_GITNEXUS = true`.
-3. **Nếu không** → Ghi nhận `HAS_GITNEXUS = false`, dùng `Grep` / `Read` làm fallback.
+1. Detect GitNexus config/capability trong runtime/session hiện tại.
+2. Nếu capability chưa sẵn sàng:
+   - kiểm tra CLI/package có mặt chưa
+   - bootstrap/install/setup binding cần thiết theo môi trường hiện tại
+   - verify command cơ bản chạy được
+3. Khi bootstrap xong, chạy bước prepare index phù hợp (ví dụ `npx gitnexus analyze`) để repo queryable.
+4. Verify repo đã usable cho implementation context/impact analysis. Nếu verify pass → ghi nhận `HAS_GITNEXUS = true`.
+5. Chỉ khi bootstrap/verify fail, hoặc GitNexus không đủ thông tin cho task hiện tại, mới ghi nhận `HAS_GITNEXUS = false` và chuyển sang fallback `Grep` / `Read`. Khi đó phải nêu rõ degraded mode và lý do fallback.
+6. Không được bỏ qua GitNexus chỉ vì scope sửa ít file; implementation vẫn cần context và impact analysis chuẩn.
 
 ### 0.3. Nhận diện Execution Boundary & Dependencies (QUAN TRỌNG)
 

@@ -290,10 +290,56 @@ def validate_contract(contract: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def print_schema() -> dict[str, Any]:
+    return {
+        'schema_version': 1,
+        'required_top_level_fields': [
+            'schema_version',
+            'skill',
+            'plan',
+            'status',
+            'timestamp',
+            'artifacts',
+            'next',
+            'blockers',
+            'pending_questions',
+        ],
+        'field_shapes': {
+            'artifacts': {
+                'primary': 'string | null',
+                'secondary': 'string[]',
+            },
+            'next': {
+                'recommended_skill': 'string | null',
+                'input_for_next': 'any',
+                'handoff_note': 'any',
+            },
+            'blockers': 'string[]',
+            'pending_questions': {
+                'questions': 'string[]',
+                'resume_from': 'any',
+                'user_answers': 'any',
+            },
+        },
+        'review_only_fields': [
+            'review_summary',
+            'review_audit',
+            'finding_validation',
+        ],
+        'note': 'Use this schema as validation reference; docs/examples must stay aligned.',
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description='Validate LP pipeline machine contract JSON files.')
     parser.add_argument('contract_file', nargs='?', help='Path to *.output.contract.json')
+    parser.add_argument('--print-schema', action='store_true', help='Print machine-friendly schema summary and exit')
     args = parser.parse_args()
+
+    if args.print_schema:
+        json.dump(print_schema(), sys.stdout, ensure_ascii=False, indent=2)
+        sys.stdout.write('\n')
+        return 0
 
     if not args.contract_file:
         parser.print_help(sys.stderr)
