@@ -23,7 +23,7 @@ Wrapper skills và wrapper commands khác chỉ được phép trỏ về file n
 - Điều phối worker skills theo state machine
 - Dùng SQLite state manager làm workflow backbone
 - Enforce artifact layout duy nhất dưới `.claude/`
-- Enforce human gates và runtime transition guards; advanced dependency/scope/retry policies hiện mới ở mức partial runtime support
+- Enforce human gates, runtime transition guards, và delivery fail-loop policy (retry budget + stop-on-confirmation conditions)
 - Sync machine contracts vào state để resume chính xác
 
 ## Worker roster
@@ -135,9 +135,13 @@ Ownership/dependency/scope policies vẫn là canonical expectations ở layer d
 
 ### Retry policy
 
-- Retry budget là policy canonical ở layer orchestration/docs
-- Runtime hiện chưa enforce đầy đủ retry counter tự động trong script state layer
-- Khi review/QA trả blocker lặp lại, main chat phải surface blocker rõ ràng thay vì giả định auto-loop vô hạn
+- Delivery fail loop quay lại `implement-plan` khi `implement-plan`/`review-implement`/`qa-automation` trả fail cần sửa.
+- Retry budget runtime: tối đa `3` vòng sửa.
+- Dừng và chuyển `WAITING_USER` khi gặp một trong các điều kiện:
+  - vượt retry budget
+  - có tín hiệu critical impact tới pipeline/thiết kế plan
+  - LLM chưa chắc chắn hoặc có nhiều hướng sửa cần user confirm
+- Nếu pass sau 1-2 vòng sửa, orchestrator vẫn phải phản hồi rõ là đã recover sau retry.
 
 ## Canonical flows
 
@@ -164,8 +168,8 @@ Ownership/dependency/scope policies vẫn là canonical expectations ở layer d
 8. Sync `04-review-implement.output.contract.json`
 9. Nếu review pass, spawn `qa-automation`
 10. Sync `05-qa-automation.output.contract.json`
-11. Nếu review/QA fail nhưng còn retry budget, quay lại implementation loop
-12. Nếu step trả `WAITING_USER` hoặc có blocker thì dừng đúng gate
+11. Nếu `implement-plan`/`review-implement`/`qa-automation` fail và chưa chạm điều kiện dừng, quay lại `implement-plan`
+12. Nếu chạm max retry hoặc cần user confirm (critical/uncertain), dừng ở `WAITING_USER`
 
 ### `/lp:cook`
 
@@ -263,4 +267,3 @@ State sync ưu tiên JSON contract.
 - `.claude/skills/lp-state-manager/SKILL.md`
 - `.claude/skills/lp-pipeline-orchestrator/scripts/lp_pipeline.py`
 - `.claude/commands/lp:index.md`
-

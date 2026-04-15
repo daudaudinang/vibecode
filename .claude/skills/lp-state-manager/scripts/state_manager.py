@@ -163,6 +163,13 @@ def parse_bool(value: str) -> bool:
     raise StateManagerError(f'Invalid boolean value: {value}')
 
 
+def coerce_int(value: Any, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def validate_mode(mode: str) -> str:
     if mode not in VALID_MODES:
         raise StateManagerError(f'Invalid mode: {mode}. Expected one of {sorted(VALID_MODES)}')
@@ -1495,13 +1502,26 @@ def resolve_next(conn: sqlite3.Connection, args: argparse.Namespace) -> dict[str
     workflow_status = snapshot['status']
     gates = snapshot['gates']
     mode = snapshot['mode']
+    metadata = snapshot.get('metadata') or {}
     steps_by_skill = {step['skill']: step for step in steps}
+    delivery_loop_skills = {'implement-plan', 'review-implement', 'qa-automation'}
+    delivery_fail_count = coerce_int(metadata.get('delivery_loop_fail_count'), 0)
+    delivery_max_retries = coerce_int(metadata.get('delivery_loop_max_retries'), 3)
+    delivery_pause_for_user = bool(metadata.get('delivery_loop_pause_for_user'))
+    delivery_pause_reason = metadata.get('delivery_loop_pause_reason')
+    has_delivery_failure = any(
+        step['skill'] in delivery_loop_skills and step['status'] in {'FAIL', 'NEEDS_REVISION'}
+        for step in steps
+    )
 
     if workflow_status in {'WAITING_USER', 'BLOCKED', 'FAILED'}:
+        reason = f'workflow is {workflow_status}'
+        if workflow_status == 'WAITING_USER' and delivery_pause_for_user and delivery_pause_reason:
+            reason = delivery_pause_reason
         return {
             'workflow_id': workflow_id,
             'can_proceed': False,
-            'reason': f'workflow is {workflow_status}',
+            'reason': reason,
             'next_step': None,
             'workflow_status': workflow_status,
         }
@@ -1515,11 +1535,19 @@ def resolve_next(conn: sqlite3.Connection, args: argparse.Namespace) -> dict[str
                 'next_step': None,
                 'workflow_status': workflow_status,
             }
-        if step['status'] in {'WAITING_USER', 'FAIL'}:
+        if step['status'] == 'WAITING_USER':
             return {
                 'workflow_id': workflow_id,
                 'can_proceed': False,
                 'reason': f"step {step['skill']} is {step['status']}",
+                'next_step': None,
+                'workflow_status': workflow_status,
+            }
+        if step['status'] == 'FAIL' and step['skill'] not in delivery_loop_skills:
+            return {
+                'workflow_id': workflow_id,
+                'can_proceed': False,
+                'reason': f"step {step['skill']} is FAIL",
                 'next_step': None,
                 'workflow_status': workflow_status,
             }
@@ -1547,6 +1575,23 @@ def resolve_next(conn: sqlite3.Connection, args: argparse.Namespace) -> dict[str
     review_implement = steps_by_skill.get('review-implement')
     qa = steps_by_skill.get('qa-automation')
 
+    if mode in {'implement', 'cook'} and delivery_pause_for_user and has_delivery_failure:
+        return {
+            'workflow_id': workflow_id,
+            'can_proceed': False,
+            'reason': delivery_pause_reason or 'delivery loop paused for user confirmation',
+            'next_step': None,
+            'workflow_status': 'WAITING_USER',
+        }
+    if mode in {'implement', 'cook'} and has_delivery_failure and delivery_fail_count >= delivery_max_retries:
+        return {
+            'workflow_id': workflow_id,
+            'can_proceed': False,
+            'reason': f'delivery fix loop reached max retries ({delivery_max_retries})',
+            'next_step': None,
+            'workflow_status': 'WAITING_USER',
+        }
+
     if review_plan and review_plan['status'] == 'NEEDS_REVISION':
         return {
             'workflow_id': workflow_id,
@@ -1555,7 +1600,15 @@ def resolve_next(conn: sqlite3.Connection, args: argparse.Namespace) -> dict[str
             'next_step': None,
             'workflow_status': workflow_status,
         }
-    if review_implement and review_implement['status'] == 'NEEDS_REVISION':
+    if implement and implement['status'] == 'FAIL':
+        return {
+            'workflow_id': workflow_id,
+            'can_proceed': True,
+            'reason': 'implement-plan failed; retry implementation loop',
+            'next_step': 'implement-plan',
+            'workflow_status': workflow_status,
+        }
+    if review_implement and review_implement['status'] in {'NEEDS_REVISION', 'FAIL'}:
         return {
             'workflow_id': workflow_id,
             'can_proceed': True,

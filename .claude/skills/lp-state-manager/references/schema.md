@@ -78,16 +78,23 @@ Notes:
   phase-*.md
   manifests/
 
-.claude/pipeline/PLAN_<NAME>/RUN_<WORKFLOW_ID>/
+.claude/pipeline/PLAN_<NAME>/
   01-create-plan.output.md
   01-create-plan.output.contract.json
+  02-review-plan.output.md
+  02-review-plan.output.contract.json
   03-implement-plan.output.md
   03-implement-plan.output.contract.json
-  child-jobs/
-    JOB_<ID>/
-      result.md
-      result.contract.json
+  04-review-implement.output.md
+  04-review-implement.output.contract.json
+  05-qa-automation.output.md
+  05-qa-automation.output.contract.json
 ```
+
+Notes:
+
+- Layout canonical hiện là plan-scoped.
+- `RUN_<WORKFLOW_ID>` vẫn giữ vai trò runtime identity trong state metadata/V2 tables, không còn là bắt buộc trong artifact folder path mặc định.
 
 ## Path and identity rules
 
@@ -121,7 +128,7 @@ Notes:
   "current_step": "create-plan",
   "metadata": {
     "current_primary_run_id": "RUN_WF_20260414_AB12CD34",
-    "artifact_root": ".claude/pipeline/PLAN_MERCHANT_BULK_IMPORT/RUN_WF_20260414_AB12CD34",
+    "artifact_root": ".claude/pipeline/PLAN_MERCHANT_BULK_IMPORT",
     "plan_root": ".claude/plans/PLAN_MERCHANT_BULK_IMPORT"
   },
   "gates": {
@@ -138,7 +145,7 @@ Notes:
       "order": 1,
       "skill": "create-plan",
       "status": "PASS",
-      "output": ".claude/pipeline/PLAN_MERCHANT_BULK_IMPORT/RUN_WF_20260414_AB12CD34/01-create-plan.output.md"
+      "output": ".claude/pipeline/PLAN_MERCHANT_BULK_IMPORT/01-create-plan.output.md"
     }
   ],
   "events": []

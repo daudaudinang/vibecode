@@ -106,7 +106,8 @@ python .claude/skills/lp-state-manager/scripts/state_manager.py resolve-next \
 4. implement xong → `upsert-step ... PASS`, set artifacts/gates cần thiết
 5. nếu `implementation_done = true` nhưng `implementation_review_passed = false` → bước tiếp theo là `review-implement`
 6. nếu `qa_passed = false` sau review PASS → bước tiếp theo là `qa-automation`
-7. nếu review/QA fail → quay lại `implement-plan`
+7. nếu `implement-plan`/review/QA fail → quay lại `implement-plan`
+8. fail-loop tối đa 3 lần; nếu critical impact hoặc cần user confirm do uncertainty/multiple options thì dừng `WAITING_USER`
 
 ### `/lp:cook`
 - Dùng cùng workflow record
