@@ -33,5 +33,5 @@ Utility wrappers:
 ## Documentation notes
 
 - Prefer `/lp:*` notation in all new docs.
-- Treat `lp-plan`, `lp-implement`, `lp-cook` as compatibility wrappers only.
+- Treat `/lp-plan`, `/lp-implement`, `/lp-cook` as compatibility wrappers only.
 - `lp:index.md` is an intentional command filename used in this repo’s LP command namespace.
