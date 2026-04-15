@@ -40,9 +40,160 @@ def load_contract_validator():
 cv = load_contract_validator()
 
 
+DELIVERY_LOOP_SKILLS = {'implement-plan', 'review-implement', 'qa-automation'}
+DELIVERY_LOOP_MAX_RETRIES = 3
+CRITICAL_SIGNAL_KEYWORDS = (
+    'critical',
+    'nghiêm trọng',
+    'pipeline',
+    'architecture',
+    'architect',
+    'design',
+    'scope_violation',
+    'breaking change',
+    'data loss',
+    'security',
+)
+UNCERTAIN_SIGNAL_KEYWORDS = (
+    'uncertain',
+    'unsure',
+    'not sure',
+    'không chắc',
+    'nhiều lựa chọn',
+    'multiple option',
+    'trade-off',
+    'cần confirm',
+)
+
+
 def print_json(payload: Any) -> None:
     json.dump(payload, sys.stdout, ensure_ascii=False, indent=2)
     sys.stdout.write('\n')
+
+
+def coerce_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        return value.strip().lower() in {'1', 'true', 'yes', 'y', 'on'}
+    return False
+
+
+def coerce_int(value: Any, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def merge_metadata_payload(*parts: dict[str, Any] | None) -> str | None:
+    payload: dict[str, Any] = {}
+    for part in parts:
+        if part:
+            payload.update(part)
+    return json.dumps(payload) if payload else None
+
+
+def detect_delivery_stop_reason(contract: dict[str, Any] | None) -> tuple[bool, str | None, str | None]:
+    if not contract:
+        return False, None, None
+
+    blockers = [str(item) for item in (contract.get('blockers') or [])]
+    questions = [str(item) for item in ((contract.get('pending_questions') or {}).get('questions') or [])]
+    signals = ' '.join(blockers + questions).lower()
+
+    critical_flag = any(
+        coerce_bool(contract.get(key))
+        for key in (
+            'critical_pipeline_impact',
+            'critical_design_impact',
+            'requires_pipeline_redesign',
+            'scope_violation',
+        )
+    )
+    if not critical_flag and any(keyword in signals for keyword in CRITICAL_SIGNAL_KEYWORDS):
+        critical_flag = True
+    if critical_flag:
+        return True, 'critical-impact', 'Detected critical impact to pipeline/plan design; user confirmation required before continuing loop'
+
+    uncertain_flag = any(
+        coerce_bool(contract.get(key))
+        for key in (
+            'llm_uncertain',
+            'needs_user_confirmation',
+            'requires_user_confirmation',
+            'multiple_options',
+        )
+    )
+    if not uncertain_flag and questions:
+        uncertain_flag = True
+    if not uncertain_flag and any(keyword in signals for keyword in UNCERTAIN_SIGNAL_KEYWORDS):
+        uncertain_flag = True
+    if uncertain_flag:
+        return True, 'needs-confirmation', 'LLM uncertainty or multiple options detected; user confirmation required before continuing loop'
+
+    return False, None, None
+
+
+def build_delivery_loop_metadata_patch(
+    snapshot: dict[str, Any],
+    skill: str,
+    status: str,
+    contract: dict[str, Any] | None,
+) -> dict[str, Any]:
+    metadata = snapshot.get('metadata') or {}
+    fail_count = coerce_int(metadata.get('delivery_loop_fail_count'), 0)
+    max_retries = coerce_int(metadata.get('delivery_loop_max_retries'), DELIVERY_LOOP_MAX_RETRIES)
+    recovery_count = coerce_int(metadata.get('delivery_loop_recovery_count'), 0)
+
+    patch: dict[str, Any] = {'delivery_loop_max_retries': max_retries}
+    if skill not in DELIVERY_LOOP_SKILLS:
+        return patch
+
+    if status in {'FAIL', 'NEEDS_REVISION'}:
+        fail_count += 1
+        should_pause, reason_code, reason = detect_delivery_stop_reason(contract)
+        if not should_pause and fail_count >= max_retries:
+            should_pause = True
+            reason_code = 'max-retries-reached'
+            reason = f'Delivery fix loop reached max retries ({max_retries})'
+
+        patch.update(
+            {
+                'delivery_loop_fail_count': fail_count,
+                'delivery_loop_last_failure_skill': skill,
+                'delivery_loop_last_failure_status': status,
+                'delivery_loop_pause_for_user': should_pause,
+                'delivery_loop_pause_reason_code': reason_code,
+                'delivery_loop_pause_reason': reason,
+            }
+        )
+        return patch
+
+    if status == 'PASS':
+        patch.update(
+            {
+                'delivery_loop_pause_for_user': False,
+                'delivery_loop_pause_reason_code': None,
+                'delivery_loop_pause_reason': None,
+            }
+        )
+        if fail_count > 0:
+            patch['delivery_loop_recovery_count'] = recovery_count + 1
+            patch['delivery_loop_last_recovery_skill'] = skill
+        return patch
+
+    if status == 'WAITING_USER':
+        patch.update(
+            {
+                'delivery_loop_pause_for_user': True,
+                'delivery_loop_pause_reason_code': 'waiting-user',
+                'delivery_loop_pause_reason': 'Worker requested user input before continuing delivery loop',
+            }
+        )
+    return patch
 
 
 def normalize_plan_name(raw: str) -> str:
@@ -412,6 +563,10 @@ def extract_review_validation_summary(contract: dict[str, Any]) -> dict[str, Any
 
 
 def sync_gates_for_skill(conn, workflow_id: str, skill: str, status: str, actor: str, contract: dict[str, Any] | None = None) -> None:
+    snapshot = sm.get_workflow_snapshot(conn, workflow_id, include_events=False)
+    delivery_loop_patch = build_delivery_loop_metadata_patch(snapshot, skill, status, contract)
+    delivery_pause_for_user = coerce_bool(delivery_loop_patch.get('delivery_loop_pause_for_user'))
+
     if skill == 'create-plan':
         if status == 'PASS':
             sm.set_gate(conn, argparse.Namespace(workflow_id=workflow_id, gate='plan_created', value='true', actor=actor, include_events=False))
@@ -514,6 +669,20 @@ def sync_gates_for_skill(conn, workflow_id: str, skill: str, status: str, actor:
     elif skill == 'implement-plan':
         if status == 'PASS':
             sm.set_gate(conn, argparse.Namespace(workflow_id=workflow_id, gate='implementation_done', value='true', actor=actor, include_events=False))
+            sm.update_workflow(
+                conn,
+                argparse.Namespace(
+                    workflow_id=workflow_id,
+                    status='ACTIVE',
+                    current_phase='implement',
+                    current_step='implement-plan',
+                    ticket=None,
+                    requirement=None,
+                    metadata_json=merge_metadata_payload(delivery_loop_patch),
+                    actor=actor,
+                    include_events=False,
+                ),
+            )
         elif status == 'WAITING_USER':
             sm.update_workflow(
                 conn,
@@ -524,22 +693,23 @@ def sync_gates_for_skill(conn, workflow_id: str, skill: str, status: str, actor:
                     current_step='implement-plan',
                     ticket=None,
                     requirement=None,
-                    metadata_json=None,
+                    metadata_json=merge_metadata_payload(delivery_loop_patch),
                     actor=actor,
                     include_events=False,
                 ),
             )
         elif status == 'FAIL':
+            sm.set_gate(conn, argparse.Namespace(workflow_id=workflow_id, gate='implementation_done', value='false', actor=actor, include_events=False))
             sm.update_workflow(
                 conn,
                 argparse.Namespace(
                     workflow_id=workflow_id,
-                    status='FAILED',
+                    status='WAITING_USER' if delivery_pause_for_user else 'ACTIVE',
                     current_phase='implement',
                     current_step='implement-plan',
                     ticket=None,
                     requirement=None,
-                    metadata_json=None,
+                    metadata_json=merge_metadata_payload(delivery_loop_patch),
                     actor=actor,
                     include_events=False,
                 ),
@@ -549,7 +719,7 @@ def sync_gates_for_skill(conn, workflow_id: str, skill: str, status: str, actor:
             raise sm.StateManagerError('review-implement gate sync requires validated contract payload')
 
         validation = extract_review_validation_summary(contract)
-        metadata_json = json.dumps({'review_validation': validation})
+        metadata_json = merge_metadata_payload({'review_validation': validation}, delivery_loop_patch)
         severity_counts = validation.get('severity_counts') or {}
         weighted_score = validation.get('weighted_score')
         business_context_validated = validation.get('business_context_validated') is True
@@ -650,11 +820,28 @@ def sync_gates_for_skill(conn, workflow_id: str, skill: str, status: str, actor:
                 ),
             )
         elif status == 'NEEDS_REVISION':
+            sm.set_gate(conn, argparse.Namespace(workflow_id=workflow_id, gate='implementation_done', value='false', actor=actor, include_events=False))
+            sm.upsert_step(
+                conn,
+                argparse.Namespace(
+                    workflow_id=workflow_id,
+                    step='implement-plan',
+                    order=None,
+                    status='PENDING',
+                    output=None,
+                    started_at=None,
+                    completed_at=None,
+                    metadata_json=json.dumps({'rework_requested_by': 'review-implement', 'trigger_status': status}),
+                    workflow_status=None,
+                    actor=actor,
+                    include_events=False,
+                ),
+            )
             sm.update_workflow(
                 conn,
                 argparse.Namespace(
                     workflow_id=workflow_id,
-                    status='ACTIVE',
+                    status='WAITING_USER' if delivery_pause_for_user else 'ACTIVE',
                     current_phase='code_review',
                     current_step='review-implement',
                     ticket=None,
@@ -665,11 +852,28 @@ def sync_gates_for_skill(conn, workflow_id: str, skill: str, status: str, actor:
                 ),
             )
         elif status == 'FAIL':
+            sm.set_gate(conn, argparse.Namespace(workflow_id=workflow_id, gate='implementation_done', value='false', actor=actor, include_events=False))
+            sm.upsert_step(
+                conn,
+                argparse.Namespace(
+                    workflow_id=workflow_id,
+                    step='implement-plan',
+                    order=None,
+                    status='PENDING',
+                    output=None,
+                    started_at=None,
+                    completed_at=None,
+                    metadata_json=json.dumps({'rework_requested_by': 'review-implement', 'trigger_status': status}),
+                    workflow_status=None,
+                    actor=actor,
+                    include_events=False,
+                ),
+            )
             sm.update_workflow(
                 conn,
                 argparse.Namespace(
                     workflow_id=workflow_id,
-                    status='FAILED',
+                    status='WAITING_USER' if delivery_pause_for_user else 'ACTIVE',
                     current_phase='code_review',
                     current_step='review-implement',
                     ticket=None,
@@ -684,8 +888,6 @@ def sync_gates_for_skill(conn, workflow_id: str, skill: str, status: str, actor:
     elif skill == 'qa-automation':
         if status == 'PASS':
             sm.set_gate(conn, argparse.Namespace(workflow_id=workflow_id, gate='qa_passed', value='true', actor=actor, include_events=False))
-        elif status == 'FAIL':
-            sm.set_gate(conn, argparse.Namespace(workflow_id=workflow_id, gate='qa_passed', value='false', actor=actor, include_events=False))
             sm.update_workflow(
                 conn,
                 argparse.Namespace(
@@ -695,7 +897,40 @@ def sync_gates_for_skill(conn, workflow_id: str, skill: str, status: str, actor:
                     current_step='qa-automation',
                     ticket=None,
                     requirement=None,
-                    metadata_json=None,
+                    metadata_json=merge_metadata_payload(delivery_loop_patch),
+                    actor=actor,
+                    include_events=False,
+                ),
+            )
+        elif status == 'FAIL':
+            sm.set_gate(conn, argparse.Namespace(workflow_id=workflow_id, gate='qa_passed', value='false', actor=actor, include_events=False))
+            sm.set_gate(conn, argparse.Namespace(workflow_id=workflow_id, gate='implementation_done', value='false', actor=actor, include_events=False))
+            sm.upsert_step(
+                conn,
+                argparse.Namespace(
+                    workflow_id=workflow_id,
+                    step='implement-plan',
+                    order=None,
+                    status='PENDING',
+                    output=None,
+                    started_at=None,
+                    completed_at=None,
+                    metadata_json=json.dumps({'rework_requested_by': 'qa-automation', 'trigger_status': status}),
+                    workflow_status=None,
+                    actor=actor,
+                    include_events=False,
+                ),
+            )
+            sm.update_workflow(
+                conn,
+                argparse.Namespace(
+                    workflow_id=workflow_id,
+                    status='WAITING_USER' if delivery_pause_for_user else 'ACTIVE',
+                    current_phase='qa',
+                    current_step='qa-automation',
+                    ticket=None,
+                    requirement=None,
+                    metadata_json=merge_metadata_payload(delivery_loop_patch),
                     actor=actor,
                     include_events=False,
                 ),
@@ -941,6 +1176,15 @@ def command_resume(conn, args: argparse.Namespace) -> dict[str, Any]:
 def compute_delivery_next(snapshot: dict[str, Any]) -> dict[str, Any]:
     steps = {step['skill']: step for step in snapshot['steps']}
     gates = snapshot['gates']
+    metadata = snapshot.get('metadata') or {}
+    fail_count = coerce_int(metadata.get('delivery_loop_fail_count'), 0)
+    max_retries = coerce_int(metadata.get('delivery_loop_max_retries'), DELIVERY_LOOP_MAX_RETRIES)
+    pause_for_user = coerce_bool(metadata.get('delivery_loop_pause_for_user'))
+    pause_reason = metadata.get('delivery_loop_pause_reason')
+    has_delivery_failure = any(
+        steps.get(step_name) and steps[step_name]['status'] in {'FAIL', 'NEEDS_REVISION'}
+        for step_name in DELIVERY_LOOP_SKILLS
+    )
 
     if 'debug-investigator' in steps:
         debug_step = steps['debug-investigator']
@@ -964,14 +1208,31 @@ def compute_delivery_next(snapshot: dict[str, Any]) -> dict[str, Any]:
             'recommended_command': command,
         }
 
+    if pause_for_user:
+        return response(
+            None,
+            pause_reason or 'delivery loop paused; user confirmation is required before continuing',
+            '/lp:implement <plan_file>',
+        )
+
+    if has_delivery_failure and fail_count >= max_retries:
+        return response(
+            None,
+            f'delivery fix loop reached max retries ({max_retries}); user confirmation is required',
+            '/lp:implement <plan_file>',
+        )
+
     for step_name in ['implement-plan', 'review-implement', 'qa-automation', 'close-task']:
         step = steps.get(step_name)
         if step and step['status'] in {'RUNNING', 'WAITING_USER'}:
             return response(step_name, f'{step_name} is {step["status"]}', None)
 
+    implement = steps.get('implement-plan')
     review = steps.get('review-implement')
     qa = steps.get('qa-automation')
 
+    if implement and implement['status'] == 'FAIL':
+        return response('implement-plan', 'implement-plan failed; retry implementation loop', '/lp:implement <plan_file>')
     if review and review['status'] in {'FAIL', 'NEEDS_REVISION'}:
         return response('implement-plan', 'review-implement requested code changes', '/lp:implement <plan_file>')
     if qa and qa['status'] == 'FAIL':
@@ -979,8 +1240,12 @@ def compute_delivery_next(snapshot: dict[str, Any]) -> dict[str, Any]:
     if gates.get('implementation_done') and not gates.get('implementation_review_passed'):
         return response('review-implement', 'implementation done; review required', '@review-implement')
     if gates.get('implementation_review_passed') and not gates.get('qa_passed'):
+        if fail_count > 0:
+            return response('qa-automation', f'review passed after {fail_count} repair loop(s); QA required', '@qa-automation')
         return response('qa-automation', 'review passed; QA required', '@qa-automation')
     if gates.get('qa_passed'):
+        if fail_count > 0:
+            return response('close-task', f'QA passed after {fail_count} repair loop(s); ready to close task', '@close-task')
         return response('close-task', 'QA passed; ready to close task', '@close-task')
     if steps.get('implement-plan') and steps['implement-plan']['status'] == 'PASS':
         return response('review-implement', 'implementation finished; start review loop', '@review-implement')

@@ -127,4 +127,10 @@ Sau mỗi lần sync output, gọi `resume` hoặc `status` để biết bước
 - quay lại `implement-plan` nếu QA fail
 - `close-task` khi QA PASS
 
+Stop conditions cho fail-loop:
+
+- Tối đa 3 vòng sửa
+- Dừng `WAITING_USER` nếu có critical impact tới pipeline/thiết kế plan
+- Dừng `WAITING_USER` nếu LLM không chắc chắn hoặc có nhiều lựa chọn cần user confirm
+
 `delivery_next` trong output của `status` / `resume` là nguồn khuyến nghị chính cho main chat.
