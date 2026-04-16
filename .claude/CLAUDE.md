@@ -76,6 +76,12 @@ Use project-scope rules and skills under `./.claude/` as the local source of tru
 - Do not use fake data, cheats, or temporary hacks just to pass tests/builds.
 - If you update docs or pipeline/task artifacts, read them back to verify the written content matches intent.
 
+## Tool payload hygiene
+
+- Khi gọi tool có optional params, nếu param không dùng thì phải bỏ hẳn field; không truyền `""`, `null`, hoặc placeholder string chỉ để đủ shape.
+- Với `Read`, chỉ truyền `pages` khi đọc PDF và giá trị phải là range hợp lệ như `"3"` hoặc `"1-5"`; file không phải PDF thì bỏ hẳn `pages`.
+- Trước khi gọi tool, ưu tiên payload tối thiểu hợp lệ thay vì payload “đủ mọi field”.
+
 ## Orchestration discipline
 
 - Use sequential execution when tasks depend on previous outputs.

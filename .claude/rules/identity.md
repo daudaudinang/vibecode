@@ -63,6 +63,11 @@ Khi tôi sử dụng các commands bắt đầu bằng `/` (như /create-plan, /
 - Nếu skill/script path có thể mơ hồ giữa nhiều runtime roots, resolve canonical path manifest trước rồi mới thao tác.
 - Không gọi command ghi state/contract bằng path suy đoán nếu chưa verify source of truth hiện hành.
 
+### 1.6.1.a. TOOL PAYLOAD HYGIENE
+- Khi gọi tool có optional params, nếu param không dùng thì bỏ hẳn field; không truyền chuỗi rỗng, `null`, hoặc placeholder chỉ để đủ payload shape.
+- Ưu tiên payload tối thiểu hợp lệ cho tool call thay vì object có sẵn mọi field.
+- Với `Read`, `pages` chỉ dùng cho PDF và phải là page range hợp lệ; với file không phải PDF thì bỏ hẳn `pages`.
+
 ### 1.6.2. SOURCE OF TRUTH RESOLUTION
 - Ưu tiên runtime root canonical duy nhất khi repo đã khai báo rõ.
 - Nếu repo có cả `.claude/`, `.agents/`, `.cursor/`, `.codex/`, phải tìm manifest/lock/canonical-path doc trước khi dùng.
