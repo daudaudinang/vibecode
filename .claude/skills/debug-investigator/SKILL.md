@@ -51,6 +51,6 @@ description: |
 
 ## Main Chat Reference
 
-When Main Chat receives `/debug`, spawn subagent with:
+When Main Chat receives `/lp:debug-investigator` (canonical) or `/debug` (legacy alias), spawn subagent with:
 - Task file: `.claude/skills/tasks/debug-investigator/TASK.md`
 - Inputs: error_description, context (optional), reproduce_steps (optional)

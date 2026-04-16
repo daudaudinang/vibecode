@@ -18,8 +18,18 @@ Cho user và assistant một điểm kiểm tra duy nhất để biết runtime 
 
 ## Cách chạy
 
+> **Scope note:** Lệnh dưới dùng `.claude/` là path tương đối với **project root** (cwd hiện tại).
+> - Chạy từ trong project dir → kiểm tra **project state** (correct, intended behavior).
+> - Muốn kiểm tra **global installation** (không có project context) → dùng absolute path:
+>   `python ~/.claude/scripts/vibecode_doctor.py`
+> - State DB, plans, pipeline luôn thuộc project scope — doctor không ghi bất cứ thứ gì.
+
 ```bash
+# Trong project dir — check project health
 python .claude/scripts/vibecode_doctor.py
+
+# Ngoài project (global install check only)
+python ~/.claude/scripts/vibecode_doctor.py
 ```
 
 ## Những gì phải kiểm tra

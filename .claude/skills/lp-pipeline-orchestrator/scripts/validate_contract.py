@@ -127,8 +127,15 @@ def validate_status_specific(contract: dict[str, Any]) -> None:
     blockers = contract['blockers']
     questions = contract['pending_questions']['questions']
 
-    if status in {'FAIL', 'NEEDS_REVISION'} and not blockers:
-        raise ContractValidationError(f'{status} contract must include at least one blocker')
+    if status == 'FAIL' and not blockers:
+        raise ContractValidationError(
+            'FAIL contract must include at least one entry in blockers[] '
+            '(human-readable description of the blocking issue)'
+        )
+    # NEEDS_REVISION does NOT require blockers[]. Evidence for revision is in
+    # review_summary.severity_counts.major and/or finding_validation.unresolved_conflicts,
+    # both of which are validated by validate_finding_validation(). Requiring blockers[]
+    # here would contradict lp_pipeline.py which forbids blocker findings in NEEDS_REVISION.
     if status == 'WAITING_USER' and not questions:
         raise ContractValidationError('WAITING_USER contract must include at least one pending question')
 

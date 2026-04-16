@@ -14,6 +14,14 @@ Skill này chuẩn hoá state management cho pipeline LittlePea.
 - Cần cập nhật step status, gate, artifact, top-level workflow status
 - Cần append event log hoặc resolve bước tiếp theo
 
+## ⚠️ Scope Rules — Đọc trước khi chạy bất kỳ lệnh nào
+
+> **Tất cả `.claude/` paths trong file này là tương đối với PROJECT ROOT**, không phải `~/` hay global.
+> - Scripts tự resolve project root qua `git rev-parse --show-toplevel`.
+> - State DB (`pipeline_state.db`), plans, pipeline artifacts đều lưu trong **project scope**.
+> - **Tuyệt đối không chạy các lệnh này ngoài project directory** — sẽ không tìm được git root và fail.
+> - `--db-path` chỉ dùng để override khi debug/test; không dùng global DB path cho nhiều project.
+
 ## Rule bắt buộc
 
 - **KHÔNG** grep rồi sửa `.json` state thủ công

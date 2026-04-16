@@ -198,6 +198,8 @@ Chỉ auto proceed khi đồng thời đúng tất cả điều kiện:
 4. workflow không ở trạng thái `WAITING_USER` / `BLOCKED` / `FAILED`
 5. command hiện tại đúng mode
 
+> **`AskUserQuestion` policy:** Pipeline tự chạy tiếp theo default. Chỉ dùng `AskUserQuestion` tại **decision gate** (ambiguity / blocker / scope change / confirm rủi ro cao). Không pop question sau mọi bước. → Chi tiết: `.claude/rules/ask-user-question-policy.md`
+
 ## Workspace model
 
 - Worktree là isolation tùy chọn, không phải bắt buộc
@@ -269,3 +271,4 @@ State sync ưu tiên JSON contract.
 - `.claude/skills/lp-state-manager/SKILL.md`
 - `.claude/skills/lp-pipeline-orchestrator/scripts/lp_pipeline.py`
 - `.claude/commands/lp:index.md`
+- `.claude/rules/ask-user-question-policy.md` — khi nào dùng `AskUserQuestion` và khi nào không

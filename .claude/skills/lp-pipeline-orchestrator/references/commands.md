@@ -1,5 +1,11 @@
 # LP Pipeline Commands
 
+> **⚠️ Scope quan trọng:** Tất cả lệnh trong file này dùng `.claude/` là path tương đối với **project root**.
+> - Luôn chạy từ bên trong project directory (nơi có `.git/` và `.claude/manifest.json`).
+> - Scripts tự detect project root qua `git rev-parse --show-toplevel` — không dùng cwd mơ hồ.
+> - State DB, plans, pipeline artifacts lưu trong **project scope**; không bao giờ lưu lên `~/.claude/`.
+> - Nếu chạy ngoài project dir, script sẽ fail rõ ràng (không silently dùng global path).
+
 ## Script
 
 ```bash

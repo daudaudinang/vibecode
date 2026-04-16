@@ -41,7 +41,11 @@ Tạo một bản tóm tắt context bám repo thực tế bằng cách đọc:
 
 Nếu user đang gặp lỗi tooling/bootstrap, skill này nên nhắc kiểm tra doctor trước:
 
+> **Scope:** Chạy lệnh này từ **project root**. Doctor sẽ check project state, không phải global.
+> Muốn check global install → dùng `python ~/.claude/scripts/vibecode_doctor.py`.
+
 ```bash
+# Phải đứng trong project root
 python .claude/scripts/vibecode_doctor.py
 ```
 

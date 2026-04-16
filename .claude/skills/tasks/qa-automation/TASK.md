@@ -117,6 +117,22 @@ S4 Teardown + Publish
 
 Kiểm tra `playwright-cli` khả dụng. Nếu thiếu → cài rồi verify lại.
 
+**Browser mặc định: `chromium`** (không phải `chrome`).
+
+Thứ tự resolve browser khi chạy interactive mode:
+1. Browser đã install qua `npx playwright install chromium` (Playwright managed) → ưu tiên
+2. `chromium-browser` hoặc `chromium` có sẵn trên hệ thống → fallback
+3. Nếu không tìm thấy browser nào → hỏi user trước khi cài (`npx playwright install chromium`)
+
+> ⚠️ **Không mặc định dùng `chrome` / `google-chrome`** — Chrome thường không có trên Linux server/CI/headless env và sẽ fail ngay. Luôn dùng `chromium`.
+
+Verify command:
+```bash
+npx playwright install --list   # kiểm tra browsers đã install
+# nếu cần cài: npx playwright install chromium
+```
+
+
 ## 0.3 Resolve URL / port
 
 Theo thứ tự ưu tiên:
@@ -145,11 +161,13 @@ Theo thứ tự ưu tiên:
 PRE-FLIGHT CHECKLIST
 - Scope   : [...]
 - Mode    : interactive | e2e-spec
+- Browser : chromium  ← luôn là chromium, không phải chrome
 - URL     : [...]
 - Auth    : [Có | Không cần | Thiếu]
 - Tooling : [Ready | Need install]
 - Server  : [LIVE | DOWN]
 ```
+
 
 Rules:
 - standalone mode: mặc định xin user xác nhận trước S1
@@ -336,7 +354,7 @@ secondary:
 - <AC list từ đâu>
 
 ## Next Step
-recommended_skill: lp:close-task       # nếu PASS
+recommended_skill: close-task          # nếu PASS  (không có prefix lp:)
 # recommended_skill: implement-plan    # nếu FAIL trong delivery loop
 input_for_next: <plan file path>
 handoff_note: "<failed AC descriptions để dev biết fix gì>"

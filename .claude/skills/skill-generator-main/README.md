@@ -1,7 +1,7 @@
 # 🧩 Skill Generator v3.2 Expert — Bộ Công Cụ Tạo AI Skill Hoàn Chỉnh
 
 > **Biến ý tưởng + quy trình công việc trong đầu bạn → AI Skill tự động hóa**
-> Dành cho Google Antigravity. Đánh giá: 🏆 100/100 S-tier.
+> Hỗ trợ đa nền tảng: Google Antigravity, Claude Code, Cursor, Windsurf, Cline và nhiều hơn. Đánh giá: 🏆 100/100 S-tier.
 
 ---
 
@@ -546,7 +546,12 @@ skill-generator/                             (20 files)
 A: Không. Skill Generator được thiết kế cho người KHÔNG biết code. Bạn chỉ cần mô tả công việc bằng lời.
 
 **Q: Global hay Workspace?**
-A: **Global** (`~/.gemini/antigravity/skills/`) nếu muốn dùng cho tất cả dự án. **Workspace** (`.agent/skills/`) nếu chỉ dùng cho 1 dự án.
+A: Phụ thuộc vào nền tảng đang dùng:
+- **Antigravity** — Global: `~/.gemini/antigravity/skills/`, Workspace: `.agent/skills/`
+- **Claude Code** — Global: `~/.claude/skills/` hoặc `~/.claude/commands/`, Project: `.claude/skills/` hoặc `.claude/commands/`
+- **Cursor** — Global: `.cursor/rules/`, Project: `.cursor/rules/` trong repo
+
+Chọn **Global** nếu muốn dùng cho tất cả dự án, **Workspace/Project** nếu chỉ cho 1 dự án cụ thể.
 
 **Q: Skill tạo ra lưu ở đâu?**
 A: AI sẽ hỏi bạn muốn Global hay Workspace, rồi tự tạo file vào đúng vị trí.

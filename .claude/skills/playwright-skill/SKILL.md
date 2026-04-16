@@ -4,12 +4,14 @@ description: Complete browser automation with Playwright. Auto-detects dev serve
 ---
 
 **IMPORTANT - Path Resolution:**
-This skill can be installed in different locations (plugin system, manual installation, global, or project-specific). Before executing any commands, determine the skill directory based on where you loaded this SKILL.md file, and use that path in all commands below. Replace `$SKILL_DIR` with the actual discovered path.
+This skill can be installed in different locations. Before executing any commands, determine the skill directory based on **where you loaded this SKILL.md file** (i.e. the directory containing this file), and use that as `$SKILL_DIR` in all commands below.
 
-Common installation paths:
+> **How to resolve `$SKILL_DIR`:** Use the directory of *this* SKILL.md file — do NOT hardcode any of the paths below. These are only listed as reference examples for common installation scenarios.
 
+Common installation paths (for reference only, do not hardcode):
+
+- Global Claude Code: `~/.claude/skills/playwright-skill`
 - Plugin system: `~/.claude/plugins/marketplaces/playwright-skill/skills/playwright-skill`
-- Manual global: `~/.claude/skills/playwright-skill`
 - Project-specific: `<project>/.claude/skills/playwright-skill`
 
 # Playwright Browser Automation

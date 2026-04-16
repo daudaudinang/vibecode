@@ -11,7 +11,36 @@ from pathlib import Path
 from typing import Any
 
 
-SCRIPT_ROOT = Path(__file__).resolve().parents[4]
+def _resolve_script_root() -> Path:
+    """Resolve project root for locating sibling scripts.
+
+    Priority:
+    1. Git repo root (works for both project-scope and worktree setups)
+    2. parents[4] fallback (original hardcoded depth, valid when script lives
+       inside <repo>/.claude/skills/<skill>/scripts/)
+
+    This fix is needed because when the .claude/ tree is installed globally
+    (e.g. ~/.claude/), parents[4] resolves to the home directory instead of
+    the project root, causing STATE_MANAGER_PATH / CONTRACT_VALIDATOR_PATH to
+    point at the wrong location at import time.
+    """
+    try:
+        result = subprocess.run(
+            ['git', 'rev-parse', '--show-toplevel'],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        root = result.stdout.strip()
+        if root:
+            return Path(root).resolve()
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        pass
+    # Fallback: assume project-scope layout depth
+    return Path(__file__).resolve().parents[4]
+
+
+SCRIPT_ROOT = _resolve_script_root()
 STATE_MANAGER_PATH = SCRIPT_ROOT / '.claude/skills/lp-state-manager/scripts/state_manager.py'
 CONTRACT_VALIDATOR_PATH = SCRIPT_ROOT / '.claude/skills/lp-pipeline-orchestrator/scripts/validate_contract.py'
 LP_PIPELINE_EXAMPLES = {
@@ -186,6 +215,7 @@ def build_delivery_loop_metadata_patch(
                 'delivery_loop_pause_for_user': False,
                 'delivery_loop_pause_reason_code': None,
                 'delivery_loop_pause_reason': None,
+                'delivery_loop_fail_count': 0,  # Reset on PASS to prevent accumulation across cycles
             }
         )
         if fail_count > 0:

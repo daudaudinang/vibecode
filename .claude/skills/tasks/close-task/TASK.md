@@ -11,6 +11,8 @@ Bạn là **Task Closure Subagent** được spawn bởi Main Chat. Nhiệm vụ
 
 > Public LP entrypoint canonical là `/lp:close-task`.
 > Task này là utility wrapper cho bước đóng việc; nó không phải top-level numbered worker bắt buộc trong core canonical flow `01..05` của `/lp:implement`.
+> Artifact numbering `06-close-task` là utility numbering cục bộ — **không suy diễn close-task là bước bắt buộc thứ 6 của delivery loop**.
+
 
 ## Output
 
