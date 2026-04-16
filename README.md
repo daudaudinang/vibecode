@@ -1,6 +1,6 @@
 # vibecode
 
-Canonical workspace for the LittlePea (`/lp:*`) workflow on Claude Code.
+Canonical workspace for the LittlePea (`/lp:*`) workflow, with Codex-ready `.codex/` and `.agents/skills/` runtime layout.
 
 ## LittlePea in one screen
 
@@ -14,9 +14,9 @@ Main chat orchestrator
 
 ## What this repository contains
 
-- `.claude/commands/`: slash command entrypoints
-- `.claude/skills/`: orchestration + worker skills
-- `.claude/ARCHITECTURE.md`: high-level architecture overview
+- `.codex/`: Codex config, AGENTS, custom agents, runtime artifacts
+- `.agents/skills/`: orchestration + worker skills for Codex skill discovery
+- `CODEX_GLOBAL_ARCHITECTURE.md`: Codex global structure and migration notes
 
 ## Canonical command surface
 
@@ -40,14 +40,22 @@ Utility wrappers:
 - Top-level LP workers = foreground agents trong current workspace
 - Worker skills là worker-only; không tự orchestration sang step kế tiếp
 - `review-plan` và `review-implement` dùng 4 persona bắt buộc
-- Canonical top-level outputs publish vào `.claude/pipeline/PLAN_<NAME>/NN-step.output.*`
+- Canonical top-level outputs publish vào `.codex/pipeline/PLAN_<NAME>/NN-step.output.*`
 - `RUN_<WORKFLOW_ID>` vẫn tồn tại như runtime identity trong state/contracts, không phải canonical top-level output folder
 
 ## Source of truth
 
-- Command index: `.claude/commands/lp:index.md`
-- Orchestrator: `.claude/skills/lp-pipeline-orchestrator/SKILL.md`
-- State backbone: `.claude/skills/lp-state-manager/SKILL.md`
+- Global/runtime rules: `.codex/AGENTS.md`
+- Orchestrator: `.agents/skills/lp-pipeline-orchestrator/SKILL.md`
+- State backbone: `.agents/skills/lp-state-manager/SKILL.md`
+
+## Global sync contract
+
+- Sync `.codex/config.toml`, `.codex/AGENTS.md`, `.codex/agents/*.toml`, `.codex/scripts/*` into `~/.codex/`
+- Sync reusable skills from `.agents/skills/*` into `~/.agents/skills/`
+- Keep runtime artifacts in project scope: `<repo>/.codex/plans/`, `<repo>/.codex/pipeline/`, `<repo>/.codex/state/`
+- Run LP commands from inside target git repo; global install does not change project-scoped runtime paths
+- `agents/openai.yaml` is optional per skill, not required for baseline skill discovery
 
 ## Documentation notes
 
