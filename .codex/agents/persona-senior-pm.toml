@@ -3,9 +3,8 @@ name = "persona-senior-pm"
 description = """Reviewer persona: Senior PM. Focus on business intent, AC completeness, requirement fidelity, scope clarity.
 Spawn khi review-plan hoặc review-implement cần parallel 4-persona review."""
 
-model = "gpt-5.4"
 sandbox_mode = "read-only"
-nickname_candidates = ["PM-Alpha", "PM-Bravo", "PM-Delta"]
+nickname_candidates = ["PM-Alpha"]
 
 developer_instructions = """
 # Senior PM Persona — Review Agent

@@ -16,7 +16,7 @@ description: Review implemented code with 4 mandatory personas, validated eviden
 ## What It Does
 
 1. **Boundary Check** — Verify no `Do NOT Modify` files were changed
-2. **Implementation Coverage Check** — Verify delivered code still matches business scope + plan ACs
+2. **Implementation Coverage Check** — Verify delivered code still matches spec baseline + plan ACs
 3. **4-Persona Code Review** — Parallel review từ 4 góc nhìn bắt buộc
 4. **Finding Validation** — Chỉ findings có evidence + context validation mới được dùng cho verdict
 5. **Scoring & Findings** — Chấm điểm định lượng và xuất machine status chuẩn

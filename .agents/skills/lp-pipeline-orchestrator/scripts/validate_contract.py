@@ -9,6 +9,8 @@ from typing import Any
 
 
 VALID_STATUSES_BY_SKILL = {
+    'create-spec': {'PASS', 'WAITING_USER'},
+    'review-spec': {'PASS', 'FAIL', 'NEEDS_REVISION'},
     'create-plan': {'PASS', 'WAITING_USER'},
     'debug-investigator': {'PASS', 'FAIL', 'WAITING_USER'},
     'review-plan': {'PASS', 'FAIL', 'NEEDS_REVISION'},
@@ -19,6 +21,8 @@ VALID_STATUSES_BY_SKILL = {
 }
 
 REQUIRED_NEXT_BY_SKILL = {
+    'create-spec': {'review-spec', None},
+    'review-spec': {'create-plan', 'create-spec', None},
     'create-plan': {'review-plan', None},
     'debug-investigator': {'create-plan', None},
     'review-plan': {'implement-plan', 'create-plan', None},
@@ -28,7 +32,7 @@ REQUIRED_NEXT_BY_SKILL = {
     'close-task': {None},
 }
 
-REVIEW_SKILLS = {'review-plan', 'review-implement'}
+REVIEW_SKILLS = {'review-spec', 'review-plan', 'review-implement'}
 REQUIRED_REVIEW_PERSONAS = {
     'senior_pm',
     'senior_uiux_designer',

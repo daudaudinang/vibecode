@@ -1,6 +1,6 @@
 ---
 name: lp-pipeline-orchestrator
-description: Canonical orchestrator for /lp:plan, /lp:implement, /lp:cook, and /lp:debug-investigator using worker skills plus the SQLite state manager.
+description: Canonical orchestrator for /lp:spec, /lp:plan, /lp:implement, /lp:review-implement, /lp:cook, and /lp:debug-investigator using worker skills plus the SQLite state manager.
 ---
 
 # LP Pipeline Orchestrator
@@ -11,8 +11,10 @@ Orchestrator canonical duy nhất cho namespace `/lp:*`.
 
 Skill này là source of truth cho:
 
+- `/lp:spec <requirement>`
 - `/lp:plan <requirement>`
 - `/lp:implement <plan | plan_name | workflow_id>`
+- `/lp:review-implement <plan | plan_name | workflow_id>`
 - `/lp:cook <requirement>`
 - `/lp:debug-investigator <symptom>`
 
@@ -31,6 +33,8 @@ Skill này chỉ áp đặt orchestration model cho namespace `/lp:*` và các w
 ## Worker roster
 
 - `create-plan`
+- `create-spec`
+- `review-spec`
 - `review-plan`
 - `implement-plan`
 - `review-implement`
@@ -52,6 +56,10 @@ Skill này chỉ áp đặt orchestration model cho namespace `/lp:*` và các w
         benchmark.json
   pipeline/
     PLAN_<NAME>/
+      00-create-spec.output.md
+      00-create-spec.output.contract.json
+      00-review-spec.output.md
+      00-review-spec.output.contract.json
       01-create-plan.output.md
       01-create-plan.output.contract.json
       02-review-plan.output.md
@@ -147,16 +155,29 @@ Ownership/dependency/scope policies vẫn là canonical expectations ở layer d
 
 ## Canonical flows
 
+### `/lp:spec`
+
+1. Normalize `plan_name`
+2. `start-spec`
+3. Spawn `create-spec`
+4. `sync-output` từ `00-create-spec.output.contract.json`
+5. Spawn `review-spec`
+6. `sync-output` từ `00-review-spec.output.contract.json`
+7. Nếu review pass, set `spec_approved = true`
+8. Dừng ở human gate, chờ `/lp:plan`
+
 ### `/lp:plan`
 
 1. Normalize `plan_name`
 2. `start-plan`
-3. Spawn `create-plan`
-4. `sync-output` từ `01-create-plan.output.contract.json`
-5. Nếu state cho phép, spawn `review-plan`
-6. `sync-output` từ `02-review-plan.output.contract.json`
-7. Nếu review pass, set `plan_approved = true`
-8. Dừng ở human gate, chờ `/lp:implement`
+3. Nếu requirement chưa đủ rõ theo spec checklist, orchestrator auto-insert `create-spec` -> `review-spec` trước
+4. Nếu đã có workflow `spec` và `create-spec = PASS` + `review-spec = PASS`, orchestrator promote cùng workflow sang lane `plan` (không tạo workflow mới)
+5. Spawn `create-plan`
+6. `sync-output` từ `01-create-plan.output.contract.json`
+7. Nếu state cho phép, spawn `review-plan`
+8. `sync-output` từ `02-review-plan.output.contract.json`
+9. Nếu review pass, set `plan_approved = true`
+10. Dừng ở human gate, chờ `/lp:implement`
 
 ### `/lp:implement`
 
@@ -176,10 +197,11 @@ Ownership/dependency/scope policies vẫn là canonical expectations ở layer d
 ### `/lp:cook`
 
 1. `start-cook`
-2. Chạy full planning loop
-3. Chỉ khi `plan_approved = true` mới vào delivery loop
-4. Chạy full delivery loop
-5. Nếu vượt retry budget, có blocker, hoặc cần user input thì dừng
+2. Chạy `create-spec` -> `review-spec` trước để chốt requirement + UX flow + happy/edge cases
+3. Chạy full planning loop
+4. Chỉ khi `plan_approved = true` mới vào delivery loop
+5. Chạy full delivery loop
+6. Nếu vượt retry budget, có blocker, hoặc cần user input thì dừng
 
 ### `/lp:debug-investigator`
 
@@ -219,7 +241,7 @@ Chỉ auto proceed khi đồng thời đúng tất cả điều kiện:
 
 ## Agent execution policy
 
-- Top-level LP worker steps (`create-plan`, `review-plan`, `implement-plan`, `review-implement`, `qa-automation`, `debug-investigator`) bắt buộc dùng agents; parent agent là orchestrator, không tự thay worker step khi flow canonical yêu cầu agent worker.
+- Top-level LP worker steps (`create-spec`, `review-spec`, `create-plan`, `review-plan`, `implement-plan`, `review-implement`, `qa-automation`, `debug-investigator`) bắt buộc dùng agents; parent agent là orchestrator, không tự thay worker step khi flow canonical yêu cầu agent worker.
 - Mặc định spawn các top-level LP agents ngay trong current workspace, không dùng worktree isolation.
 - Chỉ dùng worktree isolation nếu user explicit yêu cầu.
 - Top-level LP worker steps phải chạy foreground.

@@ -19,6 +19,7 @@ Triển khai 1 plan hoặc 1 phase thành code đúng boundary, đúng ownership
 ## Canonical inputs
 
 - `.codex/plans/PLAN_<NAME>/plan.md` hoặc `phase-XX-*.md`
+- `.codex/plans/PLAN_<NAME>/spec.md` nếu tồn tại
 - `.codex/plans/PLAN_<NAME>/manifests/ownership.json`
 - `.codex/plans/PLAN_<NAME>/manifests/dependency-graph.json` nếu plan parallel-ready
 

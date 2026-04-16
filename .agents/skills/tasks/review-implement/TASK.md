@@ -77,10 +77,12 @@ Không dùng `APPROVED`, `APPROVED WITH NOTES`, `CHANGES REQUESTED`.
 
 Phải làm:
 1. Đọc `plan_file`.
-2. Đọc implement artifacts canonical:
+2. Nếu tồn tại, đọc `spec_file` tại `.codex/plans/<PLAN_NAME>/spec.md`.
+3. Đọc implement artifacts canonical:
    - `.codex/pipeline/<PLAN_NAME>/03-implement-plan.output.md`
    - `.codex/pipeline/<PLAN_NAME>/03-implement-plan.output.contract.json`
-3. Trích xuất:
+4. Trích xuất:
+   - spec baseline (happy paths, edge cases, UI states, business rules)
    - Acceptance Criteria
    - Allowed files / Do NOT Modify
    - `touched_files`
@@ -105,7 +107,7 @@ Nếu có `Do NOT Modify` violation hoặc scope violation nghiêm trọng:
 ### 1.2 Coverage check
 
 Phải kiểm tra:
-- implementation có bám requirement gốc + plan AC không
+- implementation có bám requirement gốc + spec baseline + plan AC không
 - có thiếu tính năng nào không
 - verify evidence có thực sự chứng minh behavior mong muốn không
 - nếu implementation chỉ merge raw findings/evidence yếu, phải hạ verdict

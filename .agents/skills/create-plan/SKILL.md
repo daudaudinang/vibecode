@@ -19,6 +19,7 @@ Tạo 1 plan canonical cho LittlePea, đủ artifact để orchestrator review, 
 ## Canonical inputs
 
 - Requirement từ user hoặc orchestrator
+- `.codex/plans/PLAN_<NAME>/spec.md` nếu tồn tại (source of truth nghiệp vụ/UX)
 - Context codebase liên quan
 - Nếu có: ticket/workflow metadata từ orchestrator
 

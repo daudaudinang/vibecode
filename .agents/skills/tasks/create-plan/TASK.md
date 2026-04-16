@@ -9,6 +9,7 @@ Bạn là **Planner Worker** được spawn bởi orchestrator (parent agent). N
 ## Input
 
 - `requirement`: mô tả yêu cầu từ user
+- `spec_file`: `.codex/plans/PLAN_<NAME>/spec.md` (optional nhưng bắt buộc dùng nếu tồn tại)
 - `plan_name`: tên plan `PLAN_XXX` (có thể suy ra từ requirement)
 - `workflow_id`: workflow ID để sync state (optional)
 - `existing_plan`: path plan cũ nếu đang update (optional)

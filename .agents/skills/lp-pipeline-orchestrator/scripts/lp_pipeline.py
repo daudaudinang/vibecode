@@ -47,6 +47,8 @@ SKILLS_ROOT = Path(__file__).resolve().parents[2]
 STATE_MANAGER_PATH = SKILLS_ROOT / 'lp-state-manager/scripts/state_manager.py'
 CONTRACT_VALIDATOR_PATH = SKILLS_ROOT / 'lp-pipeline-orchestrator/scripts/validate_contract.py'
 LP_PIPELINE_EXAMPLES = {
+    'start-spec': "python ~/.agents/skills/lp-pipeline-orchestrator/scripts/lp_pipeline.py start-spec --plan-name \"PLAN_CHECKOUT_REDESIGN\" --requirement \"Clarify business rules, UX flow, happy path, and edge cases for checkout redesign\"",
+    'start-review-implement': "python ~/.agents/skills/lp-pipeline-orchestrator/scripts/lp_pipeline.py start-review-implement --workflow-id WF_20260409_000001",
     'next': "python ~/.agents/skills/lp-pipeline-orchestrator/scripts/lp_pipeline.py next --workflow-id \"WF_20260409_000001\"",
     'sync-output': "python ~/.agents/skills/lp-pipeline-orchestrator/scripts/lp_pipeline.py sync-output --workflow-id WF_20260409_000001 --output-file .codex/pipeline/PLAN_MERCHANT_BULK_IMPORT/01-create-plan.output.md --contract-file .codex/pipeline/PLAN_MERCHANT_BULK_IMPORT/01-create-plan.output.contract.json --plan-file .codex/plans/PLAN_MERCHANT_BULK_IMPORT/plan.md",
 }
@@ -100,6 +102,15 @@ UNCERTAIN_SIGNAL_KEYWORDS = (
     'trade-off',
     'cần confirm',
 )
+SPEC_CLARITY_CHECKLIST = {
+    'business': ('business', 'goal', 'mục tiêu', 'scope', 'in-scope', 'out-of-scope'),
+    'flow': ('flow', 'luồng', 'journey', 'steps'),
+    'happy_path': ('happy path', 'main flow', 'luồng chính'),
+    'edge_cases': ('edge', 'exception', 'error', 'thất bại', 'timeout', 'empty'),
+    'ui_ux': ('ui', 'ux', 'screen', 'loading', 'empty state', 'error state', 'cta'),
+    'acceptance': ('acceptance', 'ac', 'given', 'when', 'then', 'definition of done'),
+}
+SPEC_CLARITY_MIN_GROUPS = 4
 
 
 def print_json(payload: Any) -> None:
@@ -245,6 +256,143 @@ def normalize_plan_name(raw: str) -> str:
         return value
     normalized = re.sub(r'[^A-Za-z0-9]+', '_', value).strip('_').upper()
     return f'PLAN_{normalized}'
+
+
+def assess_requirement_clarity(requirement: str) -> dict[str, Any]:
+    text = requirement.lower()
+    satisfied_groups: list[str] = []
+    missing_groups: list[str] = []
+    for group, hints in SPEC_CLARITY_CHECKLIST.items():
+        if any(hint in text for hint in hints):
+            satisfied_groups.append(group)
+        else:
+            missing_groups.append(group)
+    is_sufficient = len(satisfied_groups) >= SPEC_CLARITY_MIN_GROUPS
+    return {
+        'is_sufficient': is_sufficient,
+        'satisfied_groups': satisfied_groups,
+        'missing_groups': missing_groups,
+        'minimum_required_groups': SPEC_CLARITY_MIN_GROUPS,
+    }
+
+
+def find_workflow_by_plan_name(conn, plan_name: str) -> dict[str, Any] | None:
+    rows = conn.execute(
+        '''
+        SELECT workflow_id
+        FROM workflows
+        WHERE plan_name = ? AND status IN ('ACTIVE', 'WAITING_USER', 'BLOCKED')
+        ORDER BY updated_at DESC
+        LIMIT 5
+        ''',
+        (plan_name,),
+    ).fetchall()
+    if not rows:
+        return None
+    if len(rows) > 1:
+        summary = ', '.join(row['workflow_id'] for row in rows[:3])
+        raise sm.StateManagerError(
+            f'Multiple non-terminal workflows found for plan_name={plan_name}: {summary}. '
+            'Pass --workflow-id explicitly'
+        )
+    return sm.get_workflow_snapshot(conn, rows[0]['workflow_id'], include_events=False)
+
+
+def ensure_steps_registered(conn, workflow_id: str, required_steps: list[str], actor: str) -> None:
+    snapshot = sm.get_workflow_snapshot(conn, workflow_id, include_events=False)
+    existing_steps = {step['skill'] for step in snapshot['steps']}
+    for step_name in required_steps:
+        if step_name in existing_steps:
+            continue
+        sm.upsert_step(
+            conn,
+            argparse.Namespace(
+                workflow_id=workflow_id,
+                step=step_name,
+                order=None,
+                status='PENDING',
+                output=None,
+                started_at=None,
+                completed_at=None,
+                metadata_json=None,
+                workflow_status=None,
+                actor=actor,
+                include_events=False,
+            ),
+        )
+
+
+def start_workflow_step(conn, workflow_id: str, step_name: str, actor: str, source_command: str) -> None:
+    snapshot = sm.get_workflow_snapshot(conn, workflow_id, include_events=False)
+    target = next((step for step in snapshot['steps'] if step['skill'] == step_name), None)
+    if target is None:
+        raise sm.StateManagerError(f'Cannot start {step_name}: step not registered')
+    if target['status'] in {'RUNNING', 'PASS', 'SKIPPED'}:
+        return
+    sm.start_step(
+        conn,
+        argparse.Namespace(
+            workflow_id=workflow_id,
+            step=step_name,
+            order=None,
+            output=None,
+            started_at=None,
+            metadata_json=json.dumps({'source_command': source_command}),
+            actor=actor,
+            include_events=False,
+        ),
+    )
+
+
+def promote_spec_workflow_to_plan(conn, snapshot: dict[str, Any], args: argparse.Namespace, clarity: dict[str, Any]) -> dict[str, Any]:
+    workflow_id = snapshot['workflow_id']
+    create_spec_step = next((step for step in snapshot['steps'] if step['skill'] == 'create-spec'), None)
+    review_spec_step = next((step for step in snapshot['steps'] if step['skill'] == 'review-spec'), None)
+    if create_spec_step is None:
+        raise sm.StateManagerError(f'Workflow {workflow_id} is in spec mode but missing create-spec step')
+    if create_spec_step['status'] != 'PASS':
+        raise sm.StateManagerError(
+            f'Workflow {workflow_id} has spec step status {create_spec_step["status"]}; complete spec before /lp:plan'
+        )
+    if review_spec_step is None:
+        raise sm.StateManagerError(f'Workflow {workflow_id} is in spec mode but missing review-spec step')
+    if review_spec_step['status'] != 'PASS':
+        raise sm.StateManagerError(
+            f'Workflow {workflow_id} has review-spec status {review_spec_step["status"]}; complete review-spec before /lp:plan'
+        )
+
+    ensure_steps_registered(conn, workflow_id, ['create-plan', 'review-plan'], args.actor)
+    sm.update_workflow(
+        conn,
+        argparse.Namespace(
+            workflow_id=workflow_id,
+            mode='plan',
+            status='ACTIVE',
+            current_phase='plan',
+            current_step='create-plan',
+            ticket=args.ticket,
+            requirement=args.requirement,
+            metadata_json=json.dumps(
+                {
+                    'plan_started_from_spec': True,
+                    'spec_to_plan_transition': True,
+                    'spec_clarity_assessment': clarity,
+                }
+            ),
+            actor=args.actor,
+            include_events=False,
+        ),
+    )
+    start_workflow_step(conn, workflow_id, 'create-plan', args.actor, '/lp:plan')
+    payload = sm.get_workflow_snapshot(conn, workflow_id, include_events=args.include_events)
+    payload['recommended_next'] = {
+        'agent': 'create-plan',
+        'command': f'/lp:plan {args.requirement}' if args.requirement else f'/lp:plan {payload["plan_name"]}',
+    }
+    payload['workflow_transition'] = 'spec-to-plan'
+    payload['workspace_warning'] = warn_same_workspace_concurrency(payload['plan_name'])
+    payload['workspace_policy'] = workspace_policy(payload['plan_name'])
+    return payload
 
 
 def infer_plan_name(plan_name: str | None, plan_file: str | None, fallback: str | None = None) -> str:
@@ -417,6 +565,29 @@ def load_contract(output_file: str, contract_file: str | None) -> dict[str, Any]
 def command_start_plan(conn, args: argparse.Namespace) -> dict[str, Any]:
     plan_name = infer_plan_name(args.plan_name, None, args.requirement if args.allow_requirement_name else None)
     ensure_pipeline_dir(resolve_project_root(args.repo_root), plan_name)
+    clarity = assess_requirement_clarity(args.requirement)
+    existing = find_workflow_by_plan_name(conn, plan_name)
+
+    if existing is not None and existing['status'] in {'ACTIVE', 'WAITING_USER', 'BLOCKED'}:
+        if existing['mode'] == 'spec':
+            return promote_spec_workflow_to_plan(conn, existing, args, clarity)
+        raise sm.StateManagerError(
+            f'Active workflow already exists for plan_name={plan_name}: {existing["workflow_id"]}. '
+            'Use --workflow-id explicitly or finish/resume the existing run before starting another'
+        )
+
+    required_steps = 'create-plan,review-plan'
+    current_phase = 'plan'
+    current_step = 'create-plan'
+    source_command = '/lp:plan'
+    recommended_agent = 'create-plan'
+    auto_spec = not clarity['is_sufficient']
+    if auto_spec:
+        required_steps = 'create-spec,review-spec,create-plan,review-plan'
+        current_phase = 'spec'
+        current_step = 'create-spec'
+        source_command = '/lp:plan (auto-spec)'
+        recommended_agent = 'create-spec'
 
     create_args = argparse.Namespace(
         workflow_id=args.workflow_id,
@@ -425,9 +596,57 @@ def command_start_plan(conn, args: argparse.Namespace) -> dict[str, Any]:
         ticket=args.ticket,
         requirement=args.requirement,
         status='ACTIVE',
-        current_phase='plan',
-        current_step='create-plan',
-        steps='create-plan,review-plan',
+        current_phase=current_phase,
+        current_step=current_step,
+        steps=required_steps,
+        started_at=args.started_at,
+        metadata_json=merge_metadata_payload(
+            json.loads(args.metadata_json) if args.metadata_json else None,
+            {'spec_clarity_assessment': clarity, 'auto_spec_triggered': auto_spec},
+        ),
+        actor=args.actor,
+        include_events=args.include_events,
+    )
+    payload = sm.create_workflow(conn, create_args)
+    sm.start_step(
+        conn,
+        argparse.Namespace(
+            workflow_id=payload['workflow_id'],
+            step=current_step,
+            order=1,
+            output=None,
+            started_at=args.started_at,
+            metadata_json=json.dumps({'source_command': source_command}),
+            actor=args.actor,
+            include_events=False,
+        ),
+    )
+    payload = sm.get_workflow_snapshot(conn, payload['workflow_id'], include_events=args.include_events)
+    payload['recommended_next'] = {
+        'agent': recommended_agent,
+        'command': f'/lp:plan {args.requirement}' if args.requirement else f'/lp:plan {plan_name}',
+    }
+    payload['spec_clarity_assessment'] = clarity
+    payload['auto_spec_triggered'] = auto_spec
+    payload['workspace_warning'] = warn_same_workspace_concurrency(plan_name)
+    payload['workspace_policy'] = workspace_policy(plan_name)
+    return payload
+
+
+def command_start_spec(conn, args: argparse.Namespace) -> dict[str, Any]:
+    plan_name = infer_plan_name(args.plan_name, None, args.requirement if args.allow_requirement_name else None)
+    ensure_pipeline_dir(resolve_project_root(args.repo_root), plan_name)
+
+    create_args = argparse.Namespace(
+        workflow_id=args.workflow_id,
+        plan_name=plan_name,
+        mode='spec',
+        ticket=args.ticket,
+        requirement=args.requirement,
+        status='ACTIVE',
+        current_phase='spec',
+        current_step='create-spec',
+        steps='create-spec,review-spec',
         started_at=args.started_at,
         metadata_json=args.metadata_json,
         actor=args.actor,
@@ -438,19 +657,19 @@ def command_start_plan(conn, args: argparse.Namespace) -> dict[str, Any]:
         conn,
         argparse.Namespace(
             workflow_id=payload['workflow_id'],
-            step='create-plan',
+            step='create-spec',
             order=1,
             output=None,
             started_at=args.started_at,
-            metadata_json=json.dumps({'source_command': '/lp:plan'}),
+            metadata_json=json.dumps({'source_command': '/lp:spec'}),
             actor=args.actor,
             include_events=False,
         ),
     )
     payload = sm.get_workflow_snapshot(conn, payload['workflow_id'], include_events=args.include_events)
     payload['recommended_next'] = {
-        'agent': 'create-plan',
-        'command': f'/lp:plan {args.requirement}' if args.requirement else f'/lp:plan {plan_name}',
+        'agent': 'create-spec',
+        'command': f'/lp:spec {args.requirement}' if args.requirement else f'/lp:spec {plan_name}',
     }
     payload['workspace_warning'] = warn_same_workspace_concurrency(plan_name)
     payload['workspace_policy'] = workspace_policy(plan_name)
@@ -468,9 +687,9 @@ def command_start_cook(conn, args: argparse.Namespace) -> dict[str, Any]:
         ticket=args.ticket,
         requirement=args.requirement,
         status='ACTIVE',
-        current_phase='plan',
-        current_step='create-plan',
-        steps='create-plan,review-plan,implement-plan',
+        current_phase='spec',
+        current_step='create-spec',
+        steps='create-spec,review-spec,create-plan,review-plan,implement-plan',
         started_at=args.started_at,
         metadata_json=args.metadata_json,
         actor=args.actor,
@@ -491,7 +710,7 @@ def command_start_cook(conn, args: argparse.Namespace) -> dict[str, Any]:
         conn,
         argparse.Namespace(
             workflow_id=payload['workflow_id'],
-            step='create-plan',
+            step='create-spec',
             order=1,
             output=None,
             started_at=args.started_at,
@@ -511,6 +730,8 @@ def command_start_implement(conn, args: argparse.Namespace) -> dict[str, Any]:
     snapshot = sm.get_workflow_snapshot(conn, workflow_id, include_events=False)
     if not snapshot['gates'].get('plan_approved'):
         raise sm.StateManagerError(f'Workflow {workflow_id} is not plan-approved yet')
+    if snapshot['gates'].get('spec_created') and not snapshot['gates'].get('spec_approved'):
+        raise sm.StateManagerError(f'Workflow {workflow_id} has spec_created=true but spec_approved=false')
 
     plan_name = snapshot['plan_name']
     ensure_pipeline_dir(resolve_project_root(args.repo_root), plan_name)
@@ -634,10 +855,95 @@ def request_implementation_rework(conn, workflow_id: str, actor: str, requested_
 
 def sync_gates_for_skill(conn, workflow_id: str, skill: str, status: str, actor: str, contract: dict[str, Any] | None = None) -> None:
     snapshot = sm.get_workflow_snapshot(conn, workflow_id, include_events=False)
+    mode = snapshot.get('mode')
     delivery_loop_patch = build_delivery_loop_metadata_patch(snapshot, skill, status, contract)
     delivery_pause_for_user = coerce_bool(delivery_loop_patch.get('delivery_loop_pause_for_user'))
 
-    if skill == 'create-plan':
+    if skill == 'create-spec':
+        if status == 'PASS':
+            sm.set_gate(conn, argparse.Namespace(workflow_id=workflow_id, gate='spec_created', value='true', actor=actor, include_events=False))
+            sm.set_gate(conn, argparse.Namespace(workflow_id=workflow_id, gate='spec_approved', value='false', actor=actor, include_events=False))
+            sm.set_gate(conn, argparse.Namespace(workflow_id=workflow_id, gate='requirement_clarified', value='true', actor=actor, include_events=False))
+            sm.update_workflow(
+                conn,
+                argparse.Namespace(
+                    workflow_id=workflow_id,
+                    status='ACTIVE',
+                    current_phase='spec',
+                    current_step='create-spec',
+                    ticket=None,
+                    requirement=None,
+                    metadata_json=None,
+                    actor=actor,
+                    include_events=False,
+                ),
+            )
+        elif status == 'WAITING_USER':
+            sm.update_workflow(
+                conn,
+                argparse.Namespace(
+                    workflow_id=workflow_id,
+                    status='WAITING_USER',
+                    current_phase='spec',
+                    current_step='create-spec',
+                    ticket=None,
+                    requirement=None,
+                    metadata_json=None,
+                    actor=actor,
+                    include_events=False,
+                ),
+            )
+    elif skill == 'review-spec':
+        sm.set_gate(conn, argparse.Namespace(workflow_id=workflow_id, gate='spec_reviewed', value='true' if status in {'PASS', 'FAIL', 'NEEDS_REVISION'} else 'false', actor=actor, include_events=False))
+        sm.set_gate(conn, argparse.Namespace(workflow_id=workflow_id, gate='spec_approved', value='true' if status == 'PASS' else 'false', actor=actor, include_events=False))
+        if status == 'PASS':
+            next_status = 'WAITING_USER' if mode == 'spec' else 'ACTIVE'
+            next_phase = 'spec_review' if mode == 'spec' else 'spec_review'
+            sm.update_workflow(
+                conn,
+                argparse.Namespace(
+                    workflow_id=workflow_id,
+                    status=next_status,
+                    current_phase=next_phase,
+                    current_step='review-spec',
+                    ticket=None,
+                    requirement=None,
+                    metadata_json=None,
+                    actor=actor,
+                    include_events=False,
+                ),
+            )
+        elif status == 'NEEDS_REVISION':
+            sm.update_workflow(
+                conn,
+                argparse.Namespace(
+                    workflow_id=workflow_id,
+                    status='ACTIVE',
+                    current_phase='spec',
+                    current_step='review-spec',
+                    ticket=None,
+                    requirement=None,
+                    metadata_json=None,
+                    actor=actor,
+                    include_events=False,
+                ),
+            )
+        elif status == 'FAIL':
+            sm.update_workflow(
+                conn,
+                argparse.Namespace(
+                    workflow_id=workflow_id,
+                    status='FAILED',
+                    current_phase='spec_review',
+                    current_step='review-spec',
+                    ticket=None,
+                    requirement=None,
+                    metadata_json=None,
+                    actor=actor,
+                    include_events=False,
+                ),
+            )
+    elif skill == 'create-plan':
         if status == 'PASS':
             sm.set_gate(conn, argparse.Namespace(workflow_id=workflow_id, gate='plan_created', value='true', actor=actor, include_events=False))
         elif status == 'WAITING_USER':
@@ -687,6 +993,8 @@ def sync_gates_for_skill(conn, workflow_id: str, skill: str, status: str, actor:
                 ),
             )
     elif skill == 'review-plan':
+        if status == 'PASS' and snapshot['gates'].get('spec_created') and not snapshot['gates'].get('spec_approved'):
+            raise sm.StateManagerError('Cannot set plan PASS when spec exists but is not approved')
         validation = extract_review_validation_summary(contract or {})
         metadata_json = json.dumps({'review_validation': validation})
         sm.set_gate(conn, argparse.Namespace(workflow_id=workflow_id, gate='plan_reviewed', value='true' if status in {'PASS', 'FAIL', 'NEEDS_REVISION'} else 'false', actor=actor, include_events=False))
@@ -1036,6 +1344,19 @@ def command_sync_output(conn, args: argparse.Namespace) -> dict[str, Any]:
                 include_events=False,
             ),
         )
+    elif skill == 'create-spec' and contract.get('plan'):
+        spec_path = str(Path('.codex/plans') / contract['plan'] / 'spec.md')
+        sm.set_artifact(
+            conn,
+            argparse.Namespace(
+                workflow_id=workflow_id,
+                key='final_spec_path',
+                path=spec_path,
+                metadata_json=None,
+                actor=args.actor,
+                include_events=False,
+            ),
+        )
 
     sync_gates_for_skill(conn, workflow_id, skill, status, args.actor, contract={k: v for k, v in contract.items() if not k.startswith('_')})
     sm.append_event_record(
@@ -1113,6 +1434,19 @@ def command_start_followup(conn, args: argparse.Namespace) -> dict[str, Any]:
     return sm.get_workflow_snapshot(conn, workflow_id, include_events=args.include_events)
 
 
+def command_start_review_implement(conn, args: argparse.Namespace) -> dict[str, Any]:
+    followup_args = argparse.Namespace(
+        workflow_id=args.workflow_id,
+        plan_name=args.plan_name,
+        plan_file=args.plan_file,
+        step='review-implement',
+        actor=args.actor,
+        source_command='/lp:review-implement',
+        include_events=args.include_events,
+    )
+    return command_start_followup(conn, followup_args)
+
+
 def command_start_debug(conn, args: argparse.Namespace) -> dict[str, Any]:
     plan_name = infer_plan_name(args.plan_name, None, args.requirement if args.allow_requirement_name else None)
     ensure_pipeline_dir(resolve_project_root(args.repo_root), plan_name)
@@ -1185,6 +1519,8 @@ def command_resume(conn, args: argparse.Namespace) -> dict[str, Any]:
     if next_info['next_step']:
         result['recommended_agent'] = next_info['next_step']
         result['recommended_command'] = {
+            'create-spec': '@create-spec or /lp:spec',
+            'review-spec': '@review-spec',
             'create-plan': '@create-plan or /lp:plan',
             'review-plan': '@review-plan',
             'implement-plan': '@implement-plan or /lp:implement',
@@ -1207,7 +1543,6 @@ def compute_delivery_next(snapshot: dict[str, Any]) -> dict[str, Any]:
         steps.get(step_name) and steps[step_name]['status'] in {'FAIL', 'NEEDS_REVISION'}
         for step_name in DELIVERY_LOOP_SKILLS
     )
-
     if 'debug-investigator' in steps:
         debug_step = steps['debug-investigator']
         if debug_step['status'] == 'PASS':
@@ -1222,6 +1557,13 @@ def compute_delivery_next(snapshot: dict[str, Any]) -> dict[str, Any]:
                 'reason': f'debug-investigator is {debug_step["status"]}',
                 'recommended_command': None,
             }
+
+    if not gates.get('plan_approved'):
+        return {
+            'action': None,
+            'reason': 'planning/spec flow not completed yet; delivery loop has not started',
+            'recommended_command': None,
+        }
 
     def response(action: str | None, reason: str, command: str | None = None) -> dict[str, Any]:
         return {
@@ -1301,6 +1643,18 @@ def build_parser() -> argparse.ArgumentParser:
     start_plan.add_argument('--allow-requirement-name', action='store_true')
     start_plan.set_defaults(handler=command_start_plan)
 
+    start_spec = subparsers.add_parser('start-spec')
+    start_spec.add_argument('--workflow-id')
+    start_spec.add_argument('--plan-name')
+    start_spec.add_argument('--ticket')
+    start_spec.add_argument('--requirement', required=True)
+    start_spec.add_argument('--metadata-json')
+    start_spec.add_argument('--started-at')
+    start_spec.add_argument('--actor', default='orchestrator')
+    start_spec.add_argument('--include-events', action='store_true')
+    start_spec.add_argument('--allow-requirement-name', action='store_true')
+    start_spec.set_defaults(handler=command_start_spec)
+
     start_cook = subparsers.add_parser('start-cook')
     start_cook.add_argument('--workflow-id')
     start_cook.add_argument('--plan-name')
@@ -1332,6 +1686,14 @@ def build_parser() -> argparse.ArgumentParser:
     start_implement.add_argument('--actor', default='orchestrator')
     start_implement.add_argument('--include-events', action='store_true')
     start_implement.set_defaults(handler=command_start_implement)
+
+    start_review_implement = subparsers.add_parser('start-review-implement')
+    start_review_implement.add_argument('--workflow-id')
+    start_review_implement.add_argument('--plan-name')
+    start_review_implement.add_argument('--plan-file')
+    start_review_implement.add_argument('--actor', default='orchestrator')
+    start_review_implement.add_argument('--include-events', action='store_true')
+    start_review_implement.set_defaults(handler=command_start_review_implement)
 
     follow = subparsers.add_parser('start-followup')
     follow.add_argument('--workflow-id')

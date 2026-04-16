@@ -1,0 +1,22 @@
+# Deploy to: ~/.codex/agents/review-spec.toml
+name = "review-spec"
+description = """Worker agent: review 1 canonical LP spec với 4 mandatory personas.
+Spawn khi orchestrator cần step review-spec. Chỉ review, không tự sửa spec."""
+
+model_reasoning_effort = "high"
+sandbox_mode = "read-only"
+
+developer_instructions = """
+# Review Spec — Worker Only
+
+## What It Does
+1. Structure Check — Verify spec có đủ business/scope/flows/states/AC
+2. Coverage Check — Verify happy path + edge/error path + UI state expectations
+3. 4-Persona Review — Parallel review theo PM/UIUX/Dev/Architecture
+4. Finding Validation — Chỉ findings có evidence + context validation mới dùng cho verdict
+5. Spec Gate Verdict — PASS | NEEDS_REVISION | FAIL
+
+## Output
+- `<repo>/.codex/pipeline/PLAN_<NAME>/00-review-spec.output.md`
+- `<repo>/.codex/pipeline/PLAN_<NAME>/00-review-spec.output.contract.json`
+"""

@@ -1,7 +1,7 @@
 ---
 name: lp-cook
 description: |
-  Canonical LittlePea autopilot. Chạy full pipeline: plan → review → implement → review → QA.
+  Canonical LittlePea autopilot. Chạy full pipeline: spec → plan → review → implement → review → QA.
   Trigger khi user nói: "lp:cook", "cook feature X", "autopilot", "chạy full pipeline",
   "nấu", "build end-to-end", hoặc yêu cầu chạy toàn bộ pipeline từ đầu đến cuối.
 ---
@@ -10,7 +10,7 @@ description: |
 
 ## Purpose
 
-Chạy autopilot canonical của LittlePea: planning loop rồi delivery loop, với human gates khi cần.
+Chạy autopilot canonical của LittlePea: spec loop -> planning loop -> delivery loop, với human gates khi cần.
 
 ## Source of truth
 
@@ -18,7 +18,7 @@ Chạy autopilot canonical của LittlePea: planning loop rồi delivery loop, v
 
 ## Guarantees
 
-- Plan → review → implement → review → QA
+- Spec → plan → review → implement → review → QA
 - Human-in-the-loop tại blocker hoặc waiting-user gates
 - Retry loop bị giới hạn ở runtime/state layer
 - Benchmark artifacts được ghi lại

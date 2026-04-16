@@ -43,12 +43,14 @@ Before calling any project-specific CLI:
 - Direct edit trong workspace hiện tại là mode canonical cho LP ở repo này.
 - Không auto spawn agent trong worktree.
 - Chỉ dùng worktree khi user explicit yêu cầu isolation bằng worktree.
-- Top-level LP agents phải chạy foreground; **cấm** `run_in_background` cho `create-plan`, `review-plan`, `implement-plan`, `review-implement`, `qa-automation`, `debug-investigator`.
+- Top-level LP agents phải chạy foreground; **cấm** `run_in_background` cho `create-spec`, `review-spec`, `create-plan`, `review-plan`, `implement-plan`, `review-implement`, `qa-automation`, `debug-investigator`.
 - `status` và `resume` phải surface rõ `workspace_policy` + `entry_decision`; không bắt orchestrator phải đoán writer authority.
 
 ### `start-plan`
 
 Tạo workflow mới cho `/lp:plan`.
+Nếu requirement chưa đủ rõ (business/flow/happy/edge/UI/AC), command này sẽ auto-insert `create-spec` -> `review-spec` trước `create-plan`.
+Nếu đã có workflow `spec` cho cùng `plan_name` và `create-spec = PASS` + `review-spec = PASS`, command sẽ promote cùng workflow sang lane `plan`.
 
 ```bash
 python ~/.agents/skills/lp-pipeline-orchestrator/scripts/lp_pipeline.py start-plan \
@@ -56,9 +58,19 @@ python ~/.agents/skills/lp-pipeline-orchestrator/scripts/lp_pipeline.py start-pl
   --requirement "Create reviewed plan for merchant bulk import"
 ```
 
+### `start-spec`
+
+Tạo workflow mới cho `/lp:spec`.
+
+```bash
+python ~/.agents/skills/lp-pipeline-orchestrator/scripts/lp_pipeline.py start-spec \
+  --plan-name PLAN_MERCHANT_BULK_IMPORT \
+  --requirement "Clarify business rules, UX flow, happy path, and edge cases for merchant bulk import"
+```
+
 ### `start-cook`
 
-Tạo workflow mới cho `/lp:cook`, đồng thời set gate `user_approved_implementation = true`.
+Tạo workflow mới cho `/lp:cook`, chạy từ `create-spec` -> `review-spec`, đồng thời set gate `user_approved_implementation = true`.
 
 ### `start-debug`
 
@@ -78,6 +90,16 @@ Chuẩn bị workflow đã approved để chạy delivery loop từ `implement-p
 python ~/.agents/skills/lp-pipeline-orchestrator/scripts/lp_pipeline.py start-implement \
   --plan-name PLAN_MERCHANT_BULK_IMPORT \
   --plan-file .codex/plans/PLAN_MERCHANT_BULK_IMPORT/plan.md
+```
+
+### `start-review-implement`
+
+Wrapper trực tiếp cho `/lp:review-implement`, tương đương `start-followup --step review-implement`.
+Command này chỉ hợp lệ khi `implementation_done = true`.
+
+```bash
+python ~/.agents/skills/lp-pipeline-orchestrator/scripts/lp_pipeline.py start-review-implement \
+  --workflow-id WF_20260409_000001
 ```
 
 ### `start-followup`

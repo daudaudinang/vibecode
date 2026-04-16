@@ -11,6 +11,7 @@ description: |
 ## Purpose
 
 Tạo reviewed plan canonical cho LittlePea rồi dừng ở human gate trước implement.
+Nếu có `spec.md` thì plan phải bám vào spec này như source of truth nghiệp vụ/UX.
 
 ## Source of truth
 
@@ -18,6 +19,8 @@ Tạo reviewed plan canonical cho LittlePea rồi dừng ở human gate trước
 
 ## Guarantees
 
+- Nếu requirement chưa rõ theo spec checklist, orchestrator có thể auto chạy `create-spec` -> `review-spec` trước khi vào `create-plan`
+- Nếu đã có workflow `spec` pass cho cùng `plan_name`, orchestrator resume/promote cùng workflow sang lane `plan`
 - Tạo workflow state
 - Chạy `create-plan` → `review-plan`
 - Sync machine contracts vào state

@@ -3,9 +3,8 @@ name = "persona-senior-dev"
 description = """Reviewer persona: Senior Developer. Focus on logic correctness, tests, edge cases, boundary violations.
 Spawn khi review-plan hoặc review-implement cần parallel 4-persona review."""
 
-model = "gpt-5.3-codex"
 sandbox_mode = "read-only"
-nickname_candidates = ["Dev-Apex", "Dev-Blaze", "Dev-Cipher"]
+nickname_candidates = ["Dev-Apex"]
 
 developer_instructions = """
 # Senior Developer Persona — Review Agent

@@ -22,6 +22,7 @@ Main chat orchestrator
 
 Use these commands as the public LP namespace:
 
+- `/lp:spec <requirement>`
 - `/lp:plan <requirement>`
 - `/lp:implement <plan_file | plan_name | workflow_id>`
 - `/lp:cook <requirement>`
@@ -29,6 +30,7 @@ Use these commands as the public LP namespace:
 
 Utility wrappers:
 
+- `/lp:review-implement <plan_file | plan_name | workflow_id>`
 - `/lp:qa-automation <AC_LIST_OR_TICKET>`
 - `/lp:close-task <ticket_key>`
 - `/lp:lesson-capture`
@@ -42,6 +44,7 @@ Utility wrappers:
 - `review-plan` và `review-implement` dùng 4 persona bắt buộc
 - Canonical top-level outputs publish vào `.codex/pipeline/PLAN_<NAME>/NN-step.output.*`
 - `RUN_<WORKFLOW_ID>` vẫn tồn tại như runtime identity trong state/contracts, không phải canonical top-level output folder
+- Spec-first flow khuyến nghị: `/lp:spec` -> `/lp:plan` -> `/lp:implement`
 
 ## Source of truth
 

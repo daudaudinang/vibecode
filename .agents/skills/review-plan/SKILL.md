@@ -20,6 +20,7 @@ Review 1 canonical LP plan để chặn plan mơ hồ, lệch nghiệp vụ, l�
 ## Canonical inputs
 
 - `.codex/plans/PLAN_<NAME>/plan.md`
+- `.codex/plans/PLAN_<NAME>/spec.md` nếu tồn tại
 - `phase-XX-*.md` nếu có
 - `.codex/plans/PLAN_<NAME>/manifests/ownership.json` nếu có
 - `.codex/plans/PLAN_<NAME>/manifests/dependency-graph.json` nếu có

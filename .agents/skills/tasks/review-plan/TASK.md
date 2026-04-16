@@ -80,10 +80,12 @@ Phải làm:
 1. Đọc `plan_file`.
 2. Xác định `PLAN_NAME`.
 3. Đọc thêm artifacts liên quan nếu có:
+   - `spec.md`
    - `phase-XX-*.md`
    - `manifests/ownership.json`
    - `manifests/dependency-graph.json`
 4. Trích xuất:
+   - Spec baseline (happy paths / edge cases / UI states / rules)
    - Goal / requirement gốc
    - Acceptance Criteria
    - Execution Boundary
@@ -92,6 +94,7 @@ Phải làm:
    - Risks / dependencies / implementation order
 
 Nếu plan thiếu phần cần thiết để review nghiêm túc, ghi ngay vào findings.
+Nếu có `spec.md` mà plan lệch spec baseline, phải ghi Major/Blocker tùy mức độ.
 
 ## Phase 1 — Structural + scope validation
 

@@ -15,7 +15,7 @@ from typing import Any
 
 
 DEFAULT_DB_PATH_RELATIVE = Path('.codex/state/pipeline_state.db')
-VALID_MODES = {'plan', 'implement', 'cook', 'debug'}
+VALID_MODES = {'spec', 'plan', 'implement', 'cook', 'debug'}
 STATE_MANAGER_EXAMPLES = {
     'upsert-step': "python ~/.agents/skills/lp-state-manager/scripts/state_manager.py --db-path \".codex/state/pipeline_state.db\" upsert-step --workflow-id \"WF_20260409_000001\" --step \"review-implement\" --order 4 --status FAIL --output \".codex/pipeline/PLAN_MERCHANT_BULK_IMPORT/04-review-implement.output.md\"",
     'resolve-next': "python ~/.agents/skills/lp-state-manager/scripts/state_manager.py resolve-next --workflow-id \"WF_20260409_000001\"",
@@ -25,6 +25,8 @@ VALID_STEP_STATUSES = {'PENDING', 'RUNNING', 'PASS', 'FAIL', 'NEEDS_REVISION', '
 PHASE_BY_STEP = {
     'jira-workflow-bridge': 'intake',
     'debug-investigator': 'debug',
+    'create-spec': 'spec',
+    'review-spec': 'spec_review',
     'create-plan': 'plan',
     'review-plan': 'plan_review',
     'implement-plan': 'implement',
@@ -33,13 +35,17 @@ PHASE_BY_STEP = {
     'close-task': 'close',
 }
 DEFAULT_STEPS_BY_MODE = {
+    'spec': ['create-spec', 'review-spec'],
     'plan': ['create-plan', 'review-plan'],
     'implement': ['implement-plan'],
-    'cook': ['create-plan', 'review-plan', 'implement-plan'],
+    'cook': ['create-spec', 'review-spec', 'create-plan', 'review-plan', 'implement-plan'],
     'debug': ['debug-investigator'],
 }
 DEFAULT_GATES = {
     'requirement_clarified': False,
+    'spec_created': False,
+    'spec_reviewed': False,
+    'spec_approved': False,
     'plan_created': False,
     'plan_reviewed': False,
     'plan_approved': False,
@@ -294,6 +300,11 @@ def workflow_status_for_business_state(snapshot: dict[str, Any]) -> str:
         debug_step = next((step for step in steps if step['skill'] == 'debug-investigator'), None)
         if debug_step and debug_step['status'] == 'PASS':
             return 'COMPLETED'
+        return 'ACTIVE'
+
+    if mode == 'spec':
+        if gates.get('spec_approved'):
+            return 'WAITING_USER'
         return 'ACTIVE'
 
     if mode == 'plan' and gates.get('plan_approved') and not gates.get('user_approved_implementation'):
@@ -973,6 +984,9 @@ def update_workflow(conn: sqlite3.Connection, args: argparse.Namespace) -> dict[
         if k not in {'db_path', 'command', 'actor', 'handler'} and v is not None
     }
 
+    if getattr(args, 'mode', None) is not None:
+        updates.append('mode = ?')
+        params.append(validate_mode(args.mode))
     if args.status is not None:
         updates.append('status = ?')
         params.append(validate_workflow_status(args.status))
@@ -1409,6 +1423,12 @@ def validate_workflow_transition(snapshot: dict[str, Any], target_step: str) -> 
                 'ok': False,
                 'reason': 'user_approved_implementation gate is false',
             }
+    if target_step in {'create-plan', 'review-plan', 'implement-plan'}:
+        if snapshot['gates'].get('spec_created') and not snapshot['gates'].get('spec_approved'):
+            return {
+                'ok': False,
+                'reason': 'spec_approved gate is false',
+            }
 
     for step in steps:
         if step['order'] >= target['order']:
@@ -1574,7 +1594,52 @@ def resolve_next(conn: sqlite3.Connection, args: argparse.Namespace) -> dict[str
             'workflow_status': workflow_status,
         }
 
+    if mode == 'spec':
+        create_spec = steps_by_skill.get('create-spec')
+        review_spec = steps_by_skill.get('review-spec')
+        if review_spec and review_spec['status'] in {'FAIL', 'NEEDS_REVISION'}:
+            return {
+                'workflow_id': workflow_id,
+                'can_proceed': False,
+                'reason': 'review-spec requested revisions',
+                'next_step': None,
+                'workflow_status': workflow_status,
+            }
+        if create_spec and create_spec['status'] == 'PENDING':
+            return {
+                'workflow_id': workflow_id,
+                'can_proceed': True,
+                'reason': 'create-spec pending',
+                'next_step': 'create-spec',
+                'workflow_status': workflow_status,
+            }
+        if review_spec and review_spec['status'] == 'PENDING' and create_spec and create_spec['status'] == 'PASS':
+            return {
+                'workflow_id': workflow_id,
+                'can_proceed': True,
+                'reason': 'create-spec passed; review-spec pending',
+                'next_step': 'review-spec',
+                'workflow_status': workflow_status,
+            }
+        if review_spec and review_spec['status'] == 'PASS':
+            return {
+                'workflow_id': workflow_id,
+                'can_proceed': False,
+                'reason': 'spec finalized; waiting for /lp:plan',
+                'next_step': None,
+                'workflow_status': 'WAITING_USER',
+            }
+        return {
+            'workflow_id': workflow_id,
+            'can_proceed': False,
+            'reason': 'spec workflow requires manual follow-up',
+            'next_step': None,
+            'workflow_status': workflow_status,
+        }
+
     review_plan = steps_by_skill.get('review-plan')
+    create_spec = steps_by_skill.get('create-spec')
+    review_spec = steps_by_skill.get('review-spec')
     implement = steps_by_skill.get('implement-plan')
     review_implement = steps_by_skill.get('review-implement')
     qa = steps_by_skill.get('qa-automation')
@@ -1759,6 +1824,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     update = subparsers.add_parser('update-workflow')
     update.add_argument('--workflow-id', required=True)
+    update.add_argument('--mode')
     update.add_argument('--status')
     update.add_argument('--current-phase')
     update.add_argument('--current-step')

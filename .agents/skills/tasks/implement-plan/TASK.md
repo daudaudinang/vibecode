@@ -104,7 +104,8 @@ S4 Publish
 ## 1. Read plan
 
 1. Đọc `plan_file`.
-2. Xác định:
+2. Nếu tồn tại, đọc `.codex/plans/PLAN_<NAME>/spec.md` làm baseline nghiệp vụ/UX.
+3. Xác định:
    - Tier của plan (S/M/L/P)
    - phases / tasks
    - nếu Tier L/P có sharding thì ghi lại danh sách phase files và chỉ load phase file liên quan khi vào phase đó

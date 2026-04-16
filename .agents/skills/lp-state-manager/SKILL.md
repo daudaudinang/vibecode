@@ -1,6 +1,6 @@
 ---
 name: lp-state-manager
-description: Quản lý workflow state cho pipeline LittlePea bằng SQLite qua script chuẩn, thay cho grep/sửa JSON thủ công. Dùng khi agent cần tạo workflow, tìm workflow theo plan name, đọc state hiện tại, cập nhật step/gate/artifact/event, hoặc suy ra bước kế tiếp trong /lp:plan, /lp:implement, /lp:cook.
+description: Quản lý workflow state cho pipeline LittlePea bằng SQLite qua script chuẩn, thay cho grep/sửa JSON thủ công. Dùng khi agent cần tạo workflow, tìm workflow theo plan name, đọc state hiện tại, cập nhật step/gate/artifact/event, hoặc suy ra bước kế tiếp trong /lp:spec, /lp:plan, /lp:implement, /lp:cook.
 ---
 
 # LP State Manager
@@ -10,6 +10,7 @@ Skill này chuẩn hoá state management cho pipeline LittlePea.
 ## Khi nào dùng
 
 - Cần tạo workflow state mới cho `/lp:plan`, `/lp:implement`, `/lp:cook`, `/lp:debug-investigator`
+- Cần tạo workflow state mới cho `/lp:spec`, `/lp:plan`, `/lp:implement`, `/lp:cook`, `/lp:debug-investigator`
 - Cần tìm workflow theo `workflow_id`, `plan_name`, `ticket`, `status`
 - Cần cập nhật step status, gate, artifact, top-level workflow status
 - Cần append event log hoặc resolve bước tiếp theo
@@ -137,6 +138,15 @@ python ~/.agents/skills/lp-state-manager/scripts/state_manager.py resolve-next \
 ```
 
 ## Pattern dùng trong pipeline
+
+### `/lp:spec`
+1. `create-workflow --mode spec`
+2. `upsert-step create-spec --status RUNNING`
+3. create-spec xong → `upsert-step ... PASS`, `set-gate requirement_clarified true`
+4. `upsert-step review-spec --status RUNNING`
+5. review-spec xong:
+   - PASS -> `set-gate spec_approved true`
+   - NEEDS_REVISION/FAIL -> `set-gate spec_approved false`
 
 ### `/lp:plan`
 1. `create-workflow --mode plan`

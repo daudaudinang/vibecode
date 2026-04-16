@@ -288,6 +288,7 @@ Trong canonical LP workflows, **bắt buộc** spawn worker agents theo flow:
 
 | Skill invocation     | Worker bắt buộc dùng agent                            |
 | -------------------- | ----------------------------------------------------- |
+| `lp-spec`            | `create-spec`, `review-spec`                          |
 | `lp-plan`            | `create-plan`, `review-plan`                          |
 | `lp-implement`       | `implement-plan`, `review-implement`, `qa-automation` |
 | `lp-cook`            | Toàn bộ pipeline                                      |
