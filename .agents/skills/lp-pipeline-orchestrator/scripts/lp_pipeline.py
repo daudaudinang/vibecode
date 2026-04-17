@@ -16,12 +16,8 @@ def _resolve_script_root() -> Path:
 
     Priority:
     1. Explicit repo root from current git worktree/repository
-    2. Fail fast with clear error if no project root can be resolved
-
-    Global skill install under ~/.agents/skills/ is supported only when the
-    script is executed from inside a git repository. We intentionally avoid
-    path-depth fallbacks because they can silently resolve to ~/. and corrupt
-    runtime path assumptions for state manager and contract validator.
+    2. Tree traversal looking for .codex, config.toml or .git
+    3. Fail fast with clear error if no project root can be resolved
     """
     try:
         result = subprocess.run(
@@ -35,6 +31,14 @@ def _resolve_script_root() -> Path:
             return Path(root).resolve()
     except (FileNotFoundError, subprocess.CalledProcessError):
         pass
+
+    # Fallback to manual traversal looking for markers
+    current = Path.cwd().resolve()
+    for parent in [current] + list(current.parents):
+        if parent == Path.home():
+            break  # Stop at home dir to avoid confusing ~/.codex global config with project root
+        if (parent / '.codex').is_dir() or (parent / 'config.toml').is_file() or (parent / '.git').is_dir():
+            return parent
 
     raise RuntimeError(
         '[lp_pipeline] Cannot resolve project root. Run this script from inside target git repository '
@@ -80,28 +84,6 @@ cv = load_contract_validator()
 
 DELIVERY_LOOP_SKILLS = {'implement-plan', 'review-implement', 'qa-automation'}
 DELIVERY_LOOP_MAX_RETRIES = 3
-CRITICAL_SIGNAL_KEYWORDS = (
-    'critical',
-    'nghiêm trọng',
-    'pipeline',
-    'architecture',
-    'architect',
-    'design',
-    'scope_violation',
-    'breaking change',
-    'data loss',
-    'security',
-)
-UNCERTAIN_SIGNAL_KEYWORDS = (
-    'uncertain',
-    'unsure',
-    'not sure',
-    'không chắc',
-    'nhiều lựa chọn',
-    'multiple option',
-    'trade-off',
-    'cần confirm',
-)
 SPEC_CLARITY_CHECKLIST = {
     'business': ('business', 'goal', 'mục tiêu', 'scope', 'in-scope', 'out-of-scope'),
     'flow': ('flow', 'luồng', 'journey', 'steps'),
@@ -151,10 +133,6 @@ def detect_delivery_stop_reason(contract: dict[str, Any] | None) -> tuple[bool, 
     if not contract:
         return False, None, None
 
-    blockers = [str(item) for item in (contract.get('blockers') or [])]
-    questions = [str(item) for item in ((contract.get('pending_questions') or {}).get('questions') or [])]
-    signals = ' '.join(blockers + questions).lower()
-
     critical_flag = any(
         coerce_bool(contract.get(key))
         for key in (
@@ -164,8 +142,6 @@ def detect_delivery_stop_reason(contract: dict[str, Any] | None) -> tuple[bool, 
             'scope_violation',
         )
     )
-    if not critical_flag and any(keyword in signals for keyword in CRITICAL_SIGNAL_KEYWORDS):
-        critical_flag = True
     if critical_flag:
         return True, 'critical-impact', 'Detected critical impact to pipeline/plan design; user confirmation required before continuing loop'
 
@@ -178,10 +154,11 @@ def detect_delivery_stop_reason(contract: dict[str, Any] | None) -> tuple[bool, 
             'multiple_options',
         )
     )
+    
+    questions = contract.get('pending_questions', {}).get('questions') or []
     if not uncertain_flag and questions:
         uncertain_flag = True
-    if not uncertain_flag and any(keyword in signals for keyword in UNCERTAIN_SIGNAL_KEYWORDS):
-        uncertain_flag = True
+        
     if uncertain_flag:
         return True, 'needs-confirmation', 'LLM uncertainty or multiple options detected; user confirmation required before continuing loop'
 
@@ -417,11 +394,21 @@ def detect_git_repo_root(cwd: Path | None = None) -> Path | None:
             text=True,
             cwd=str(cwd) if cwd else None,
         )
+        root = result.stdout.strip()
+        if root:
+            return Path(root).resolve()
     except (FileNotFoundError, subprocess.CalledProcessError):
-        return None
+        pass
 
-    root = result.stdout.strip()
-    return Path(root).resolve() if root else None
+    # Fallback to manual traversal looking for markers
+    current = Path(cwd).resolve() if cwd else Path.cwd().resolve()
+    for parent in [current] + list(current.parents):
+        if parent == Path.home():
+            break  # Stop at home dir to avoid confusing ~/.codex global config with project root
+        if (parent / '.codex').is_dir() or (parent / 'config.toml').is_file() or (parent / '.git').is_dir():
+            return parent
+
+    return None
 
 
 def resolve_project_root(repo_root_arg: str | None = None, cwd: Path | None = None) -> Path:
@@ -550,7 +537,10 @@ def load_contract(output_file: str, contract_file: str | None) -> dict[str, Any]
         contract_path = out_path.with_suffix('.contract.json')
 
     if contract_path.exists():
-        payload = json.loads(contract_path.read_text(encoding='utf-8'))
+        raw_text = contract_path.read_text(encoding='utf-8')
+        match = re.search(r'```(?:json)?\s*\n(.*?)\n```', raw_text, re.DOTALL)
+        cleaned_text = match.group(1) if match else raw_text.strip()
+        payload = json.loads(cleaned_text)
         payload['_contract_source'] = str(contract_path)
         payload['_contract_format'] = 'json'
         return payload

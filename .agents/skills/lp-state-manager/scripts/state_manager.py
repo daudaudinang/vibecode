@@ -213,11 +213,21 @@ def detect_git_repo_root(cwd: Path | None = None) -> Path | None:
             text=True,
             cwd=str(cwd) if cwd else None,
         )
+        root = result.stdout.strip()
+        if root:
+            return Path(root).resolve()
     except (FileNotFoundError, subprocess.CalledProcessError):
-        return None
+        pass
 
-    root = result.stdout.strip()
-    return Path(root).resolve() if root else None
+    # Fallback to manual traversal looking for markers
+    current = Path(cwd).resolve() if cwd else Path.cwd().resolve()
+    for parent in [current] + list(current.parents):
+        if parent == Path.home():
+            break  # Stop at home dir to avoid confusing ~/.codex global config with project root
+        if (parent / '.codex').is_dir() or (parent / 'config.toml').is_file() or (parent / '.git').is_dir():
+            return parent
+
+    return None
 
 
 def resolve_repo_root(repo_root_arg: str | None = None, cwd: Path | None = None) -> Path:
@@ -341,7 +351,10 @@ def connect(db_path: Path) -> sqlite3.Connection:
     conn.execute('PRAGMA synchronous = NORMAL')
     conn.execute('PRAGMA busy_timeout = 5000')
     try:
-        ensure_schema(conn)
+        current_version = conn.execute('PRAGMA user_version').fetchone()[0]
+        if current_version < SCHEMA_VERSION:
+            ensure_schema(conn)
+            conn.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')
         yield conn
         conn.commit()
     except Exception:
