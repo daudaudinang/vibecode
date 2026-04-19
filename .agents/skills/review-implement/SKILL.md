@@ -1,6 +1,6 @@
 ---
 name: review-implement
-description: Review implemented code with 4 mandatory personas, validated evidence, and strict orchestrator-ready machine verdicts.
+description: Review implemented code with 4 mandatory personas (dual-mode: standard/fast), validated evidence, and strict orchestrator-ready machine verdicts.
 ---
 
 # Review Implement
@@ -17,13 +17,17 @@ description: Review implemented code with 4 mandatory personas, validated eviden
 
 1. **Boundary Check** — Verify no `Do NOT Modify` files were changed
 2. **Implementation Coverage Check** — Verify delivered code still matches spec baseline + plan ACs
-3. **4-Persona Code Review** — Parallel review từ 4 góc nhìn bắt buộc
+3. **Multi-Persona Code Review** — Review từ 4 góc nhìn bắt buộc trong 1 pass
 4. **Finding Validation** — Chỉ findings có evidence + context validation mới được dùng cho verdict
 5. **Scoring & Findings** — Chấm điểm định lượng và xuất machine status chuẩn
 
-## Mandatory persona model
+## Execution model: Dual-mode review
 
-Canonical `review-implement` bắt buộc spawn **4 agents độc lập**, mỗi agent giữ đúng 1 persona, chạy **song song** rồi mới được orchestrator tổng hợp:
+Orchestrator chọn review mode dựa trên review history trong workflow:
+
+### Standard mode (lần review đầu tiên)
+
+Spawn **4 agents độc lập**, mỗi agent giữ đúng 1 persona, chạy song song:
 
 | Persona | Persona ID | Focus |
 |---------|------------|-------|
@@ -32,7 +36,21 @@ Canonical `review-implement` bắt buộc spawn **4 agents độc lập**, mỗi
 | **Senior Developer** | `senior_developer` | Logic correctness, tests/evidence, edge cases, touched-files/scope violations |
 | **System Architecture** | `system_architecture` | Coupling, architecture impact, maintainability, technical-debt risk |
 
-Không được bỏ qua persona nào trong canonical flow.
+Orchestrator validate evidence, normalize conflicts, tổng hợp verdict cuối.
+
+### Fast mode (re-review trong loop)
+
+**1 agent duy nhất chạy multi-persona** — đánh giá lần lượt từ 4 góc nhìn trong cùng 1 pass.
+
+- Tập trung vào **delta changes** so với review trước
+- Đọc previous review output từ `.codex/pipeline/PLAN_<NAME>/` để biết findings cũ
+- Nhanh hơn vì chỉ spawn 1 agent thay vì 4
+
+### Khi nào dùng mode nào?
+
+- Chưa có lần review nào trước đó trong workflow → **standard mode**
+- Đã có ít nhất 1 lần review (`NEEDS_REVISION` hoặc `FAIL`) trước đó → **fast mode**
+- Không được bỏ qua persona nào ở cả 2 modes
 
 ## Quantitative verdict model
 
@@ -48,7 +66,7 @@ Không được bỏ qua persona nào trong canonical flow.
 ## Fail-fast gates
 
 Phải `FAIL` hoặc reject contract ngay nếu có một trong các lỗi sau:
-- thiếu bất kỳ mandatory persona nào
+- thiếu bất kỳ mandatory persona nào trong output
 - finding không có evidence tối thiểu
 - thiếu business-context validation
 - có `Do NOT Modify` scope violation

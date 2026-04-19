@@ -24,6 +24,7 @@ Tạo 1 spec canonical cho LP để làm baseline bắt buộc cho `create-plan`
 - Nếu có: artifacts liên quan feature hiện tại (`plan.md` cũ, docs hiện có, constraints kỹ thuật)
 - Nếu có ambiguity thật sự: cho phép trả `WAITING_USER` với câu hỏi tập trung vào unknowns critical
 
+
 ## Canonical spec package
 
 Spec phải bao phủ tối thiểu:

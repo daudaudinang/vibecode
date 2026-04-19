@@ -23,6 +23,7 @@ Tạo 1 plan canonical cho LittlePea, đủ artifact để orchestrator review, 
 - Context codebase liên quan
 - Nếu có: ticket/workflow metadata từ orchestrator
 
+
 ## Planning model
 
 Plan package phải phản ánh đúng runtime model mới:

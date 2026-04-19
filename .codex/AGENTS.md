@@ -383,7 +383,11 @@ KHÔNG spawn subagent trừ khi lợi ích rõ ràng và không thể thay thế
 - LP top-level worker steps phải chạy foreground.
 - Prefer direct-edit mode in the current workspace cho LP trừ khi user explicit yêu cầu isolation khác.
 - Nếu cần qua step tiếp theo, phải sync contract/state của step hiện tại trước.
-- Với `review-plan` và `review-implement`, canonical model là 4 agents độc lập theo 4 persona bắt buộc, chạy song song rồi orchestrator tổng hợp; không dùng roster recommendation mềm cho 2 flow canonical này.
+- Khi spawn worker agent, orchestrator **phải** truyền runtime metadata cô đọng trong spawn message (file paths, step, mode, expected output). Chi tiết: `lp-pipeline-orchestrator/SKILL.md` → Spawn message template.
+- Với `review-plan`, `review-spec`, và `review-implement`, dùng **dual-mode review**:
+  - **Standard mode** (lần review đầu tiên): spawn 4 persona agents độc lập, chạy song song → orchestrator merge verdict. Persona agents trả findings qua thread, không ghi file.
+  - **Fast mode** (re-review trong loop): 1 agent duy nhất chạy multi-persona, tập trung vào delta changes.
+  - Xác định mode: đã có ít nhất 1 lần review trước đó → fast mode. Chưa có → standard mode.
 
 ### Default execution outside LP
 

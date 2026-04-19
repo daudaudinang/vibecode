@@ -153,18 +153,101 @@ Ownership/dependency/scope policies vẫn là canonical expectations ở layer d
   - LLM chưa chắc chắn hoặc có nhiều hướng sửa cần user confirm
 - Nếu pass sau 1-2 vòng sửa, orchestrator vẫn phải phản hồi rõ là đã recover sau retry.
 
+## Spawn message template
+
+Khi orchestrator spawn worker agent, spawn message **phải** chứa runtime metadata cô đọng để child agent biết ngay cần làm gì, đọc file nào. Child agent nhận metadata này qua spawn message (tin nhắn đầu tiên trong thread), kết hợp với `developer_instructions` từ `.toml`.
+
+**Không nhét nội dung file vào spawn message.** Chỉ nhét đường dẫn + metadata. Child tự đọc file từ disk.
+
+### Template chung
+
+```text
+## Task
+[Mô tả ngắn 1-2 câu cần làm gì]
+
+## Plan
+- Plan name: PLAN_<NAME>
+- Plan file: .codex/plans/PLAN_<NAME>/plan.md
+- Phase files: phase-01-*.md, phase-02-*.md (nếu có)
+- Spec file: .codex/plans/PLAN_<NAME>/spec.md (nếu có)
+
+## Current Step
+- Step: [create-spec | review-spec | create-plan | review-plan | implement-plan | review-implement | qa-automation]
+- Review mode: [standard | fast] (chỉ cho review steps)
+- Previous review output: .codex/pipeline/PLAN_<NAME>/NN-step.output.md (nếu re-review)
+
+## Output
+- Report: .codex/pipeline/PLAN_<NAME>/NN-step.output.md
+- Contract: .codex/pipeline/PLAN_<NAME>/NN-step.output.contract.json
+```
+
+### Ví dụ spawn message cho standard mode review-plan (persona agent)
+
+```text
+## Task
+Review plan PLAN_CHECKOUT_REDESIGN từ góc nhìn Senior Developer.
+Đọc plan file, đánh giá theo 4 criteria trong developer_instructions, trả structured findings.
+
+## Plan
+- Plan name: PLAN_CHECKOUT_REDESIGN
+- Plan file: .codex/plans/PLAN_CHECKOUT_REDESIGN/plan.md
+- Spec file: .codex/plans/PLAN_CHECKOUT_REDESIGN/spec.md
+
+## Current Step
+- Step: review-plan (standard mode, lần đầu)
+- Persona: senior_developer
+
+## Expected Output
+Trả text response với: structured findings (severity + evidence), điểm 4 criteria, verdict contribution.
+Orchestrator sẽ merge output từ 4 persona agents.
+```
+
+### Ví dụ spawn message cho fast mode review-plan (1 agent)
+
+```text
+## Task
+Re-review plan PLAN_CHECKOUT_REDESIGN từ cả 4 góc nhìn (PM, UX, Dev, Arch).
+Tập trung vào delta changes so với review trước.
+
+## Plan
+- Plan name: PLAN_CHECKOUT_REDESIGN
+- Plan file: .codex/plans/PLAN_CHECKOUT_REDESIGN/plan.md
+- Spec file: .codex/plans/PLAN_CHECKOUT_REDESIGN/spec.md
+
+## Current Step
+- Step: review-plan (fast mode, re-review)
+- Previous review: .codex/pipeline/PLAN_CHECKOUT_REDESIGN/02-review-plan.output.md
+
+## Output
+- Report: .codex/pipeline/PLAN_CHECKOUT_REDESIGN/02-review-plan.output.md
+- Contract: .codex/pipeline/PLAN_CHECKOUT_REDESIGN/02-review-plan.output.contract.json
+```
+
+### Rules
+
+1. **Luôn kèm file paths** — child agent không cần mò tìm
+2. **Không nhét file content** — child tự đọc từ disk
+3. **Nói rõ step + mode** — child biết đang ở đâu trong pipeline
+4. **Nói rõ expected output** — child biết trả gì cho parent
+5. **Giữ ngắn gọn** — metadata chỉ chiếm vài dòng, không phải essay
+
+
 ## Canonical flows
+
+> **Global Loop Constraint:** Tất cả các luồng auto-fix (khi Worker hoặc Reviewer trả về `NEEDS_REVISION` hoặc `FAIL`) đều bị giới hạn ở **Max Retry = 3 lần**. Nếu vượt quá 3 lần lặp lại cùng một step, Orchestrator PHẢI dừng toàn bộ luồng, báo lỗi và chuyển sang trạng thái `WAITING_USER`. Hành vi này chống lặp vĩnh viễn (infinite loop).
 
 ### `/lp:spec`
 
 1. Normalize `plan_name`
 2. `start-spec`
-3. Spawn `create-spec`
+3. Spawn `@create-spec`
 4. `sync-output` từ `00-create-spec.output.contract.json`
-5. Spawn `review-spec`
+5. Spawn step review-spec (chọn mode: Standard gọi 4 persona agents, Fast gọi `@review-spec`)
 6. `sync-output` từ `00-review-spec.output.contract.json`
 7. Nếu review pass, set `spec_approved = true`
-8. Dừng ở human gate, chờ `/lp:plan`
+8. Nếu review trả về `NEEDS_REVISION` hoặc `FAIL` và chưa chạm max retry: Quay lại bước 3 (spawn lại `@create-spec` để revise dựa trên feedback review)
+9. Nếu chạm max retry hoặc dính Blocker cần user quyết định: Dừng ở `WAITING_USER`
+10. Khi đã pass, dừng ở human gate, chờ `/lp:plan`
 
 ### `/lp:plan`
 
@@ -172,12 +255,14 @@ Ownership/dependency/scope policies vẫn là canonical expectations ở layer d
 2. `start-plan`
 3. Nếu requirement chưa đủ rõ theo spec checklist, orchestrator auto-insert `create-spec` -> `review-spec` trước
 4. Nếu đã có workflow `spec` và `create-spec = PASS` + `review-spec = PASS`, orchestrator promote cùng workflow sang lane `plan` (không tạo workflow mới)
-5. Spawn `create-plan`
+5. Spawn `@create-plan`
 6. `sync-output` từ `01-create-plan.output.contract.json`
-7. Nếu state cho phép, spawn `review-plan`
+7. Nếu state cho phép, spawn step review-plan (chọn mode: Standard gọi 4 persona agents, Fast gọi `@review-plan`)
 8. `sync-output` từ `02-review-plan.output.contract.json`
 9. Nếu review pass, set `plan_approved = true`
-10. Dừng ở human gate, chờ `/lp:implement`
+10. Nếu review trả về `NEEDS_REVISION` hoặc `FAIL` và chưa chạm max retry: Quay lại bước 5 (spawn lại `@create-plan` để revise dựa trên feedback review)
+11. Nếu chạm max retry hoặc dính Blocker cần user quyết định kiến trúc: Dừng ở `WAITING_USER`
+12. Khi đã pass, dừng ở human gate, chờ `/lp:implement`
 
 ### `/lp:implement`
 
@@ -185,14 +270,15 @@ Ownership/dependency/scope policies vẫn là canonical expectations ở layer d
 2. Assert `plan_approved = true`
 3. `start-implement`
 4. Pre-implement scope/dependency guard
-5. Spawn `implement-plan`
+5. Spawn `@implement-plan`
 6. Sync `03-implement-plan.output.contract.json`
-7. Nếu pass, spawn `review-implement`
+7. Nếu pass, spawn step review-implement (chọn mode: Standard gọi 4 persona agents, Fast gọi `@review-implement`)
 8. Sync `04-review-implement.output.contract.json`
-9. Nếu review pass, spawn `qa-automation`
+9. Nếu review pass, spawn `@qa-automation`
 10. Sync `05-qa-automation.output.contract.json`
-11. Nếu `implement-plan`/`review-implement`/`qa-automation` fail và chưa chạm điều kiện dừng, quay lại `implement-plan`
-12. Nếu chạm max retry hoặc cần user confirm (critical/uncertain), dừng ở `WAITING_USER`
+11. Nếu worker (`implement-plan`, `qa-automation`) trả về `FAIL` hoặc review (`review-implement`) trả về `NEEDS_REVISION`/`FAIL`, và chưa chạm max retry: Quay lại bước 5 (spawn lại `@implement-plan` để auto-fix)
+12. Nếu chạm max retry hoặc cần user confirm (critical/uncertain blocker): Dừng ở `WAITING_USER`
+13. Khi đã pass (cả qa-automation pass), dừng ở human gate, chờ done/close task
 
 ### `/lp:cook`
 
@@ -249,7 +335,11 @@ Chỉ auto proceed khi đồng thời đúng tất cả điều kiện:
 - Background execution chỉ được xem xét ở child-job level sau này, không áp dụng cho top-level primary-run orchestration.
 - Nếu user explicit yêu cầu worktree isolation, vẫn giữ top-level LP worker steps ở foreground; worktree không làm thay đổi foreground rule.
 - Trước khi qua step top-level tiếp theo, orchestrator phải sync contract/state của step hiện tại.
-- Với `review-plan` và `review-implement`, canonical execution model là spawn 4 agents độc lập theo 4 persona bắt buộc, chạy song song trong current workspace, sau đó orchestrator mới validate evidence, normalize conflicts, và tổng hợp verdict cuối; không được bỏ qua persona nào trong flow chuẩn.
+- Với step review (`review-plan`, `review-spec`, `review-implement`), orchestrator chọn **review mode** dựa trên review history:
+  - **Standard mode** (lần review đầu tiên): **BẮT BUỘC spawn 4 persona agents lẻ** (`@persona-senior-pm`, `@persona-senior-uiux`, `@persona-senior-dev`, `@persona-system-arch`) chạy song song → orchestrator merge verdict. KHÔNG spawn `@review-plan` / `@review-spec` / `@review-implement` ở mode này.
+  - **Fast mode** (re-review trong loop): **BẮT BUỘC spawn 1 agent worker tương ứng** (`@review-plan`, `@review-spec`, hoặc `@review-implement`). Agent này sẽ nhận metadata và tự chạy multi-persona.
+- Cách xác định mode: nếu step review hiện tại đã có ít nhất 1 lần `PASS`, `NEEDS_REVISION`, hoặc `FAIL` trước đó trong cùng workflow → fast mode. Nếu chưa có → standard mode.
+- Không được bỏ qua persona nào ở cả 2 modes.
 - Intent của policy này là `use agents, but no worktree by default`, không phải `avoid agents`.
 
 ## Top-level worker spawn standard
@@ -281,10 +371,10 @@ Anti-misread:
 
 ## Review skill autonomy note
 
-- `review-plan` là worker-only skill; nó chỉ trả structured findings/contract cho orchestrator gate, không tự orchestration sang step tiếp theo.
-- `review-implement` là worker-only skill; nó chỉ trả structured findings/contract cho orchestrator gate, không tự orchestration sang step tiếp theo.
-- Với 2 review skills này, canonical roster 4 persona là hard requirement của review model và canonical execution model là 4 agents độc lập chạy song song.
-- Orchestrator không dùng "depth level" để giả lập multi-review; phải thực sự spawn đủ 4 agents persona rồi mới validate/tổng hợp.
+- `review-plan`, `review-spec`, `review-implement` là worker-only skills — chỉ trả structured findings/contract cho orchestrator gate, không tự orchestration sang step tiếp theo.
+- Canocical roster 4 persona là hard requirement cho cả 2 modes.
+- **Standard mode** (lần đầu): Spawn 4 agents độc lập là `@persona-senior-pm`, `@persona-senior-uiux`, `@persona-senior-dev`, và `@persona-system-arch`. Orchestrator validate evidence, normalize conflicts, tự tổng hợp verdict và ghi final contract.
+- **Fast mode** (re-review): Spawn 1 agent tương ứng là `@review-plan`, `@review-spec`, hoặc `@review-implement`. Worker tự thu thập delta và trả findings. Orchestrator vẫn là người ghi contract cuối cùng.
 - Findings từ review skills không được dùng để set verdict cuối nếu chưa qua validation về evidence, business context, và conflict normalization.
 
 ## Machine contracts

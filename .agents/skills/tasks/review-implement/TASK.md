@@ -50,7 +50,10 @@ Canonical `review-implement` **phải chạy đủ 4 persona**:
 Rules:
 - Không bỏ qua persona nào.
 - Không dùng roster cũ `security` / `ux-pm`.
-- Canonical execution model: spawn 4 agents độc lập, mỗi agent giữ đúng 1 persona, chạy song song rồi orchestrator mới tổng hợp.
+- Canonical execution model: **Dual-mode review**:
+  - **Standard mode** (lần đầu): 4 agents độc lập, mỗi agent 1 persona, chạy song song → orchestrator tổng hợp verdict.
+  - **Fast mode** (re-review trong loop): 1 agent duy nhất chạy multi-persona, tập trung delta changes.
+- Orchestrator chọn mode dựa trên review history. Nếu chưa có review trước → standard. Đã có → fast.
 - Contract cuối phải thể hiện đủ 4 persona đã request và đã run.
 
 ## B. Machine statuses duy nhất

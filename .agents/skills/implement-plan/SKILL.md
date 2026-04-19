@@ -23,6 +23,7 @@ Triển khai 1 plan hoặc 1 phase thành code đúng boundary, đúng ownership
 - `.codex/plans/PLAN_<NAME>/manifests/ownership.json`
 - `.codex/plans/PLAN_<NAME>/manifests/dependency-graph.json` nếu plan parallel-ready
 
+
 ## Execution model assumptions
 
 - Một plan chỉ có một primary writer/controller tại một thời điểm

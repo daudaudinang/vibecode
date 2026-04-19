@@ -40,7 +40,9 @@ Thực hiện review từ góc nhìn persona cụ thể (`senior_pm`, `senior_ui
 - Không tự đổi persona.
 - Không tự giả lập các persona còn lại.
 - Không dùng "depth level" để giả lập multi-review.
-- Canonical multi-review model là: **4 agents độc lập chạy song song**, mỗi agent giữ đúng 1 persona, rồi orchestrator mới validate và merge.
+- Canonical multi-review model là **Dual-mode review**:
+  - **Standard mode** (lần đầu): 4 agents độc lập, mỗi agent 1 persona, chạy song song → orchestrator tổng hợp.
+  - **Fast mode** (re-review trong loop): 1 agent duy nhất chạy multi-persona, tập trung delta changes.
 
 ---
 

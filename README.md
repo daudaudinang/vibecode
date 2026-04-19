@@ -54,11 +54,53 @@ Utility wrappers:
 
 ## Global sync contract
 
-- Sync `.codex/config.toml`, `.codex/AGENTS.md`, `.codex/agents/*.toml`, `.codex/scripts/*` into `~/.codex/`
-- Sync reusable skills from `.agents/skills/*` into `~/.agents/skills/`
-- Keep runtime artifacts in project scope: `<repo>/.codex/plans/`, `<repo>/.codex/pipeline/`, `<repo>/.codex/state/`
-- Run LP commands from inside target git repo; global install does not change project-scoped runtime paths
-- `agents/openai.yaml` is optional per skill, not required for baseline skill discovery
+Theo `CODEX_GLOBAL_ARCHITECTURE.md`, các file sau cần được sync từ project lên global user scope sau mỗi lần cập nhật:
+
+| Source (project) | Destination (global) | Nội dung |
+|---|---|---|
+| `.codex/AGENTS.md` | `~/.codex/AGENTS.md` | Global instruction chain cho Codex |
+| `.codex/agents/*.toml` | `~/.codex/agents/` | Custom agent definitions |
+| `.codex/scripts/*` | `~/.codex/scripts/` | Helper scripts (kể cả sync-global.sh) |
+| `.agents/skills/` | `~/.agents/skills/` | Reusable skills cho Codex discovery |
+
+Runtime artifacts **KHÔNG** được sync lên global (giữ nguyên trong project scope):
+- `.codex/plans/` — plan files
+- `.codex/pipeline/` — pipeline output
+- `.codex/state/` — SQLite state DB
+
+### Sync script
+
+Script tự động: `.codex/scripts/sync-global.sh`
+
+```bash
+# Sync tất cả (khuyến nghị)
+bash .codex/scripts/sync-global.sh
+
+# Preview trước khi sync (dry-run)
+bash .codex/scripts/sync-global.sh --dry-run
+
+# Sync từng phần
+bash .codex/scripts/sync-global.sh agents-md   # chỉ AGENTS.md
+bash .codex/scripts/sync-global.sh agents       # AGENTS.md + agent TOMLs
+bash .codex/scripts/sync-global.sh skills       # chỉ skills
+bash .codex/scripts/sync-global.sh scripts      # chỉ scripts
+```
+
+Script tự detect file nào đã up-to-date (md5 check) và chỉ copy file có thay đổi.
+
+### Khi nào cần sync?
+
+Chạy sync sau khi:
+- Cập nhật `.codex/AGENTS.md` (thêm rule, sửa workflow)
+- Thêm/sửa agent `.toml` trong `.codex/agents/`
+- Thêm/sửa skill trong `.agents/skills/`
+- Clone repo sang máy mới lần đầu
+
+### Lưu ý
+
+- Codex load `~/.agents/skills/` nếu không chạy trong context repo có `.agents/skills/`
+- Global agents `~/.codex/agents/*.toml` available cho mọi repo, không chỉ vibecode-1
+- Script có `timeout 5s` khi check accessibility của `~/.agents/skills/` để tránh hang nếu mount lỗi
 
 ## Documentation notes
 
