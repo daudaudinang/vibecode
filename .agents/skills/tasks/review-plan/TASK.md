@@ -51,7 +51,7 @@ Rules:
 - Không bỏ qua persona nào.
 - Không dùng roster cũ `security` / `ux-pm`.
 - Canonical execution model: **Dual-mode review**:
-  - **Standard mode** (lần đầu): 4 agents độc lập, mỗi agent 1 persona, chạy song song → orchestrator tổng hợp verdict.
+  - **Standard mode** (lần đầu): 4 agents độc lập, mỗi agent 1 persona, chạy song song → orchestrator tổng hợp verdict theo **Standard Mode Merge Protocol** trong `lp-pipeline-orchestrator/SKILL.md`.
   - **Fast mode** (re-review trong loop): 1 agent duy nhất chạy multi-persona, tập trung delta changes.
 - Orchestrator chọn mode dựa trên review history. Nếu chưa có review trước → standard. Đã có → fast.
 - Contract cuối phải thể hiện đủ 4 persona đã request và đã run.

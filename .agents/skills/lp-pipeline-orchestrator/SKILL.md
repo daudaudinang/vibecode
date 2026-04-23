@@ -342,6 +342,64 @@ Chỉ auto proceed khi đồng thời đúng tất cả điều kiện:
 - Không được bỏ qua persona nào ở cả 2 modes.
 - Intent của policy này là `use agents, but no worktree by default`, không phải `avoid agents`.
 
+## Standard Mode Merge Protocol
+
+> Áp dụng cho **standard mode** (lần review đầu tiên) của `review-spec`, `review-plan`, `review-implement`.
+> Orchestrator là người thực hiện merge — không phải worker.
+> Thực hiện theo đúng 4 bước dưới đây, theo thứ tự.
+
+### Bước 1 — Collect persona outputs
+
+Chờ **đủ 4 persona agents** hoàn thành. Thu thập từ mỗi agent:
+- Raw findings list: `[{ severity, issue, evidence }]`
+- 4 criteria scores (0..10) của persona đó
+
+> ❗ **Fail-fast**: Nếu bất kỳ persona nào không trả output hợp lệ (crash, timeout, thiếu evidence) → verdict tự động là `FAIL`. Không tiến hành merge.
+
+### Bước 2 — Conflict normalization (finding-level)
+
+Với mỗi issue xuất hiện từ nhiều persona, áp quy tắc sau **theo thứ tự ưu tiên**:
+
+| Tình huống | Quy tắc xử lý |
+|---|---|
+| Có bất kỳ persona nào đánh `Blocker` cho issue đó | Giữ `Blocker` — không downgrade |
+| ≥ 2 persona raise cùng issue, severity khác nhau | Dùng severity **cao nhất** |
+| ≥ 2 persona raise cùng issue, severity bằng nhau | Merge thành 1 finding, `confidence = high` |
+| Chỉ 1 persona raise, các persona khác không mention | Giữ nguyên, `confidence = medium` |
+| 2 persona **mâu thuẫn** (A: Major/Blocker, B: không có issue) | Đánh `conflict_status = needs_human_confirmation` — **không được chốt `PASS`** |
+
+Sau bước này, orchestrator có danh sách `validated_findings` và `unresolved_conflicts`.
+
+### Bước 3 — Weighted score calculation
+
+Tính score của từng persona = trung bình 4 criteria của persona đó.
+
+Sau đó tính weighted score tổng:
+
+```
+weighted_score =
+  senior_developer    × 0.30 +
+  system_architecture × 0.30 +
+  senior_pm           × 0.20 +
+  senior_uiux_designer × 0.20
+```
+
+### Bước 4 — Final verdict (priority table)
+
+Áp dụng **theo thứ tự từ trên xuống** — điều kiện nào đúng trước thì thắng:
+
+| Priority | Điều kiện | Verdict |
+|---|---|---|
+| 1 | Có ≥ 1 validated `Blocker` | `FAIL` |
+| 2 | Còn finding `needs_human_confirmation` chưa resolve | `NEEDS_REVISION` |
+| 3 | `weighted_score < 6.0` | `FAIL` |
+| 4 | `weighted_score` trong `[6.0, 8.0)` hoặc có ≥ 1 validated `Major` | `NEEDS_REVISION` |
+| 5 | `weighted_score >= 8.0` + đủ 4 persona + không Blocker + không Major | `PASS` |
+
+Sau khi có verdict, orchestrator ghi `NN-step.output.md` và `NN-step.output.contract.json`.
+
+> **Anti-pattern**: Không dùng majority vote đơn giản ("3/4 nói PASS thì PASS"). Phải đi qua đủ 4 bước trên.
+
 ## Top-level worker spawn standard
 
 1. Orchestrator nhận LP command canonical và giữ vai trò orchestrator
@@ -372,10 +430,10 @@ Anti-misread:
 ## Review skill autonomy note
 
 - `review-plan`, `review-spec`, `review-implement` là worker-only skills — chỉ trả structured findings/contract cho orchestrator gate, không tự orchestration sang step tiếp theo.
-- Canocical roster 4 persona là hard requirement cho cả 2 modes.
-- **Standard mode** (lần đầu): Spawn 4 agents độc lập là `@persona-senior-pm`, `@persona-senior-uiux`, `@persona-senior-dev`, và `@persona-system-arch`. Orchestrator validate evidence, normalize conflicts, tự tổng hợp verdict và ghi final contract.
+- Canonical roster 4 persona là hard requirement cho cả 2 modes.
+- **Standard mode** (lần đầu): Spawn 4 agents độc lập là `@persona-senior-pm`, `@persona-senior-uiux`, `@persona-senior-dev`, và `@persona-system-arch`. Orchestrator **phải chạy đủ 4 bước trong `Standard Mode Merge Protocol`** (section bên trên) để tổng hợp verdict và ghi final contract.
 - **Fast mode** (re-review): Spawn 1 agent tương ứng là `@review-plan`, `@review-spec`, hoặc `@review-implement`. Worker tự thu thập delta và trả findings. Orchestrator vẫn là người ghi contract cuối cùng.
-- Findings từ review skills không được dùng để set verdict cuối nếu chưa qua validation về evidence, business context, và conflict normalization.
+- Findings từ review skills không được dùng để set verdict cuối nếu chưa qua conflict normalization và weighted scoring (xem `Standard Mode Merge Protocol`).
 
 ## Machine contracts
 
