@@ -1,7 +1,7 @@
 ---
 name: close-task
 description: |
-  Commit code changes, transition Jira ticket to Done, log work, and capture lessons learned.
+  Commit code changes, transition Jira ticket to resolved state, log work, and capture lessons learned.
   "commit và chuyển trạng thái", "done task", "finalize task", "đóng task", "/close-task".
 ---
 
@@ -19,7 +19,7 @@ description: |
 
 1. **Selective Git Staging** — Stage only task-related files (not all files)
 2. **Conventional Commit** — Create properly formatted commit message
-3. **Jira Transition** — Move ticket to Done status
+3. **Jira Transition** — Move ticket to resolved status
 4. **Log Work** — Log time spent with worklog comment
 5. **Lesson Capture** — Run lesson-capture skill to document learnings
 

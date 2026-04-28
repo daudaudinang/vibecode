@@ -13,7 +13,7 @@ description: |
 ## Usage
 
 ```
-/qa-automation <AC_LIST_OR_TICKET>
+/lp:qa-automation <AC_LIST_OR_TICKET>
 ```
 
 ## What It Does
@@ -34,8 +34,8 @@ description: |
 ## Examples
 
 ```
-/qa-automation "Seller login redirects to dashboard"
-/qa-automation "B2B-157"  # reads AC from plan file
+/lp:qa-automation "Seller login redirects to dashboard"
+/lp:qa-automation "B2B-157"  # reads AC from plan file
 ```
 
 ## Output
@@ -48,6 +48,13 @@ description: |
 
 ## Orchestrator Reference
 
-When Orchestrator receives `/qa-automation`, invoke agent (via `@agent-name`) with:
+When Orchestrator receives `/lp:qa-automation`, invoke agent (via `@agent-name`) with:
 - Task file: `.agents/skills/tasks/qa-automation/TASK.md`
 - Inputs: ac_list, base_url (auto-detect), auth_credentials (auto-detect), test_mode
+
+## Epic Context Rules
+
+- Khi QA ở Epic mode, context baseline lấy từ plan/spec + direct dependency reports.
+- Không đọc raw notes ngoài direct dependencies.
+- Nếu plan bật `broad_context_reports = true` và tổng phase `<= 5`, có thể đọc thêm completed reports theo thứ tự phase index tăng dần.
+- Nếu dependency critical chưa được khai báo rõ (`dependency_critical = true` + missing deps), dừng `waiting_user`, không fallback tuyến tính.

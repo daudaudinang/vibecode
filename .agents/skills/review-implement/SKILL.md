@@ -10,7 +10,7 @@ description: Review implemented code with 4 mandatory personas (dual-mode: stand
 ## Usage
 
 ```
-/review-implement <plan_file_path>
+/lp:review-implement <plan_file_path>
 ```
 
 ## What It Does
@@ -79,7 +79,7 @@ Phải `FAIL` hoặc reject contract ngay nếu có một trong các lỗi sau:
 
 ## Orchestrator Reference
 
-When Orchestrator receives `/review-implement`, orchestrator phải coi đây là worker review step canonical.
+When Orchestrator receives `/lp:review-implement`, orchestrator phải coi đây là worker review step canonical.
 
 Mandatory roster:
 - Task file: `.agents/skills/tasks/review-implement/TASK.md`
@@ -95,3 +95,6 @@ Decision authority:
 - Skill này mô tả canonical review model cho `review-implement`, không phải roster gợi ý mềm.
 - Source of truth cho top-level LP spawn policy vẫn là `.agents/skills/lp-pipeline-orchestrator/SKILL.md`.
 - Human report có thể dùng wording dễ đọc, nhưng machine source of truth chỉ là `PASS | NEEDS_REVISION | FAIL`.
+- Khi review Epic phase, ưu tiên context từ direct dependency reports và phase report hiện tại; không dùng raw notes ngoài dependency trực tiếp.
+- Nếu plan bật `broad_context_reports = true` và tổng phase `<= 5`, cho phép mở rộng review context bằng completed reports theo thứ tự phase index tăng dần.
+- Nếu phát hiện branch `dependency_critical = true` thiếu dependencies explicit, report blocker `waiting_user`, không đề xuất fallback tuyến tính.

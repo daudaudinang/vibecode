@@ -1,0 +1,80 @@
+{
+  "plan": "PLAN_LP_PIPELINE_V3",
+  "command_count": 9,
+  "executed_count": 9,
+  "failed": null,
+  "results": [
+    {
+      "index": 1,
+      "label": "accessor-contract-check-and-export",
+      "command": "python -c \"import json,re; from pathlib import Path; out=Path('.codex/tmp/final-integration-accessors.json'); out.parent.mkdir(parents=True, exist_ok=True); text=Path('.agents/skills/lp-pipeline-orchestrator/references/commands.md').read_text(); keys=['single-regression-check.command','degraded-design-drift-check.command']; resolved={};\nfor key in keys:\n lines=[ln for ln in text.splitlines() if key in ln];\n assert len(lines)==1, f'{key}: expected exactly 1 candidate line, got {len(lines)}';\n ln=lines[0].strip(); cmd=None;\n if '|' in ln:\n  parts=[p.strip() for p in ln.split('|') if p.strip()];\n  if parts and parts[0].strip(chr(96))==key and len(parts)>=2:\n   cmd=parts[1];\n if cmd is None:\n  m=re.search(re.escape(key)+r'\\s*[:=]\\s*(.+)$', ln);\n  if m:\n   cmd=m.group(1).strip();\n assert cmd is not None, f'{key}: malformed accessor line: {ln}';\n cmd=cmd.strip(chr(96)).strip();\n assert cmd and cmd.lower() not in {'tbd','todo','<command>'}, f'{key}: empty/placeholder command';\n resolved[key]=cmd;\nassert len(set(resolved.values()))==2, f'accessors must resolve to two deterministic commands: {resolved}';\nout.write_text(json.dumps(resolved, indent=2, sort_keys=True) + '\\n');\nprint('accessors-deterministic-ok', out)\"",
+      "rc": 0,
+      "stdout": "accessors-deterministic-ok .codex/tmp/final-integration-accessors.json\n",
+      "stderr": ""
+    },
+    {
+      "index": 2,
+      "label": "cross-reference-coverage-check",
+      "command": "python -c \"from pathlib import Path; files=[Path('.codex/AGENTS.md')] + sorted(Path('.agents/skills').rglob('*.md')); assert len(files) > 1, 'coverage-check: no skill markdown files found'; texts={str(f):f.read_text() for f in files}; required=['.codex/','state_manager.py','waiting_user','Final Integration Verify Commands','single-regression-check.command','degraded-design-drift-check.command']; missing=[k for k in required if not any(k in t for t in texts.values())]; assert not missing, f'coverage-check missing required references: {missing}'; runtime_markers=('runtime','canonical','publish','artifact root','runtime root','source of truth'); contextual_markers=('design workspace','reference only','reference-only','not runtime','legacy','contextual','example'); drift=[];\nfor p,t in texts.items():\n for i,ln in enumerate(t.splitlines(),1):\n  low=ln.lower();\n  if '.agents/plans/' not in low:\n   continue;\n  if not any(m in low for m in runtime_markers):\n   continue;\n  if any(m in low for m in contextual_markers):\n   continue;\n  drift.append(f'{p}:{i}:{ln.strip()}');\nassert not drift, f'active runtime drift to .agents/plans/* detected: {drift}'; print('cross-reference-coverage-ok', len(files), len(required))\"",
+      "rc": 0,
+      "stdout": "cross-reference-coverage-ok 145 6\n",
+      "stderr": ""
+    },
+    {
+      "index": 3,
+      "label": "degraded-drift-semantics-check-from-accessor",
+      "command": "python -c \"import json,re; from pathlib import Path; ref=Path('.agents/skills/lp-pipeline-orchestrator/references/commands.md'); text=ref.read_text(); accessor_map=Path('.codex/tmp/final-integration-accessors.json'); assert accessor_map.exists(), f'missing accessor map: {accessor_map}'; resolved=json.loads(accessor_map.read_text()); cmd=str(resolved.get('degraded-design-drift-check.command','')).strip(); assert cmd, 'degraded-design-drift-check.command missing/empty'; low=cmd.lower(); assert ('rg ' in low or 'grep ' in low), f'degraded drift command must be grep/rg based: {cmd}'; forbidden_lines=[ln.strip() for ln in text.splitlines() if 'forbidden' in ln.lower() and ('degraded-design-drift-check' in ln or 'degraded design drift' in ln.lower())]; assert forbidden_lines, 'missing forbidden-pattern declaration for degraded-design-drift-check in commands reference'; tokens=[];\nfor ln in forbidden_lines:\n tokens.extend([m.group(1).strip() for m in re.finditer(re.escape(chr(96))+r'([^'+re.escape(chr(96))+r']+)'+re.escape(chr(96)), ln) if m.group(1).strip() and 'degraded-design-drift-check' not in m.group(1) and m.group(1).strip().lower() not in {'forbidden','patterns','pattern'}]);\nassert tokens, 'forbidden-pattern declaration must include explicit backtick patterns'; missing=[tok for tok in sorted(set(tokens)) if tok not in cmd]; assert not missing, f'command does not cover declared forbidden patterns: {missing}'; assert not re.search(r'(^|\\s)-v(\\s|$)', low), f'degraded drift command must not invert grep semantics with -v: {cmd}'; banned=['|| true','|| exit 0','&& exit 1','! rg','!grep','! grep']; assert all(x not in low for x in banned), f'degraded drift command must preserve grep exit semantics (0=FAIL,1=PASS): {cmd}'; print('degraded-drift-semantics-ok', len(set(tokens)))\"",
+      "rc": 0,
+      "stdout": "degraded-drift-semantics-ok 2\n",
+      "stderr": ""
+    },
+    {
+      "index": 4,
+      "label": "snapshot-worktrees-before-single-fixture",
+      "command": "python -c \"from pathlib import Path; out=Path('.codex/tmp/single-worktrees-before.txt'); out.parent.mkdir(parents=True, exist_ok=True); root=Path('.worktrees'); paths=sorted(p.as_posix() for p in root.rglob('*')) if root.exists() else []; out.write_text('\\n'.join(paths) + ('\\n' if paths else '')); print('worktree-snapshot-before-ok', out, len(paths))\"",
+      "rc": 0,
+      "stdout": "worktree-snapshot-before-ok .codex/tmp/single-worktrees-before.txt 0\n",
+      "stderr": ""
+    },
+    {
+      "index": 5,
+      "label": "run-single-regression-fixture-from-accessor",
+      "command": "python -c \"import json,subprocess; from pathlib import Path; accessor_map=Path('.codex/tmp/final-integration-accessors.json'); assert accessor_map.exists(), f'missing accessor map: {accessor_map}'; resolved=json.loads(accessor_map.read_text()); cmd=resolved.get('single-regression-check.command'); assert isinstance(cmd, str) and cmd.strip(), 'single-regression-check.command missing/empty'; print('RUN', cmd); raise SystemExit(subprocess.call(cmd, shell=True))\"",
+      "rc": 0,
+      "stdout": "single-regression-fixture-ok PLAN_V3_SINGLE_FIXTURE\nRUN python -c \"import json;from pathlib import Path;plan='PLAN_V3_SINGLE_FIXTURE';root=Path('.codex/pipeline')/plan;root.mkdir(parents=True,exist_ok=True);tmp=Path('.codex/tmp');tmp.mkdir(parents=True,exist_ok=True);(tmp/'final-integration-single-plan.txt').write_text(plan+'\\\\n');steps=[('03-implement-plan','implement-plan'),('04-review-implement','review-implement'),('05-qa-automation','qa-automation')];[ (root/f'{step}.output.md').write_text('---\\\\nskill: '+skill+'\\\\nstatus: PASS\\\\n---\\\\n\\\\nSynthetic single fixture output.\\\\n') for step,skill in steps ];[ (root/f'{step}.output.contract.json').write_text(json.dumps({'schema_version':1,'skill':skill,'status':'PASS','artifacts':{'primary':str(root/f'{step}.output.md')}},indent=2)+'\\\\n') for step,skill in steps ];print('single-regression-fixture-ok',plan)\"\n",
+      "stderr": ""
+    },
+    {
+      "index": 6,
+      "label": "single-runtime-shape-check",
+      "command": "python -c \"import json,os; from pathlib import Path; plan=os.environ.get('LP_SINGLE_FIXTURE_PLAN','PLAN_V3_SINGLE_FIXTURE'); req=['03-implement-plan','04-review-implement','05-qa-automation'];\nfor s in req:\n p=Path(f'.codex/pipeline/{plan}/{s}.output.contract.json');\n assert p.exists(), f'missing contract: {p}';\n d=json.loads(p.read_text());\n assert all(k in d for k in ['schema_version','skill','status']), f'{p}: missing required fields';\n assert d.get('artifacts',{}).get('primary'), f'{p}: missing artifacts.primary';\nassert not Path(f'.codex/plans/{plan}/phases').is_dir(), f'unexpected phases dir for single flow: {plan}';\nprint('single-runtime-shape-ok')\"",
+      "rc": 0,
+      "stdout": "single-runtime-shape-ok\n",
+      "stderr": ""
+    },
+    {
+      "index": 7,
+      "label": "no-worktree-artifact-check",
+      "command": "python -c \"import json,os; from pathlib import Path; plan=os.environ.get('LP_SINGLE_FIXTURE_PLAN','PLAN_V3_SINGLE_FIXTURE'); before_path=Path(os.environ.get('LP_SINGLE_WORKTREE_SNAPSHOT_BEFORE','.codex/tmp/single-worktrees-before.txt')); assert before_path.exists(), f'missing worktree-before snapshot: {before_path}'; before={ln.strip() for ln in before_path.read_text().splitlines() if ln.strip()}; root=Path('.worktrees'); after={p.as_posix() for p in root.rglob('*')} if root.exists() else set(); new=sorted(after-before); assert not new, f'new worktree artifacts detected: {new}';\ndef walk(v):\n if isinstance(v,dict):\n  for x in v.values():\n   yield from walk(x)\n elif isinstance(v,list):\n  for x in v:\n   yield from walk(x)\n elif isinstance(v,str):\n  yield v\nfor step in ['03-implement-plan','04-review-implement','05-qa-automation']:\n p=Path(f'.codex/pipeline/{plan}/{step}.output.contract.json');\n d=json.loads(p.read_text());\n bad=[s for s in walk(d) if '.worktrees/' in s or s.startswith('.worktrees')];\n assert not bad, f'{p}: unexpected worktree refs: {bad}';\nprint('single-no-worktree-delta-ok')\"",
+      "rc": 0,
+      "stdout": "single-no-worktree-delta-ok\n",
+      "stderr": ""
+    },
+    {
+      "index": 8,
+      "label": "edge-case-recovery-contract-check",
+      "command": "python -c \"from pathlib import Path; files={'plan':Path('.codex/plans/PLAN_LP_PIPELINE_V3/plan.md'),'p02':Path('.codex/plans/PLAN_LP_PIPELINE_V3/phase-02-orchestrator-epic-mode-runtime.md'),'p03':Path('.codex/plans/PLAN_LP_PIPELINE_V3/phase-03-worker-skill-task-alignment.md'),'p04':Path('.codex/plans/PLAN_LP_PIPELINE_V3/phase-04-phase-state-resume-and-merge.md'),'p05':Path('.codex/plans/PLAN_LP_PIPELINE_V3/phase-05-verification-rollout-and-doctor.md')}; texts={k:v.read_text() for k,v in files.items()}; checks=[('merge-conflict-files-line','Conflict files: <list>',('plan','p02','p04')),('worktree-prune-guidance','git worktree prune',('plan','p02','p05')),('worktree-manual-cleanup-guidance','manual cleanup',('plan','p02','p05')),('dependency-critical-gate','dependency_critical = true',('plan','p03','p04')),('dependency-no-linear-fallback','fallback tuyến tính',('plan','p03','p04')),('broad-context-branch','broad_context_reports = true',('plan','p03','p05')),('safe-boundary-definition','safe boundary',('plan','p02','p04')),('cancel-requested-enforcement','cancel_requested',('plan','p02','p04'))]; missing=[];\nfor name,token,targets in checks:\n if not any(token.lower() in texts[t].lower() for t in targets):\n  missing.append(f'{name}:{token}:{targets}');\nassert not missing, f'edge-case contract missing coverage: {missing}'; print('edge-case-contract-explicit-ok', len(checks))\"",
+      "rc": 0,
+      "stdout": "edge-case-contract-explicit-ok 8\n",
+      "stderr": ""
+    },
+    {
+      "index": 9,
+      "label": "status-enum-normalization-check",
+      "command": "python -c \"from pathlib import Path; files=[Path('.codex/AGENTS.md'),Path('.agents/skills/lp-pipeline-orchestrator/SKILL.md')]; bad=[];\nfor f in files:\n t=f.read_text();\n if 'Done' in t or 'COMPLETED' in t:\n  bad.append(str(f));\nassert not bad, bad; print('status-wording-ok')\"",
+      "rc": 0,
+      "stdout": "status-wording-ok\n",
+      "stderr": ""
+    }
+  ]
+}

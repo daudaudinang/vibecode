@@ -135,6 +135,45 @@ Hiện runtime enforce chủ yếu các transition/gate checks (`plan_approved`,
 
 Ownership/dependency/scope policies vẫn là canonical expectations ở layer docs/contracts, nhưng chưa được enforce đầy đủ trong script runtime hiện tại. Nếu worker report blocker hoặc cần user input, workflow phải dừng đúng gate.
 
+### Epic runtime contracts (V3)
+
+#### Baseline resolution contract
+
+- Priority 1: dùng `baseline_verify_command` trong frontmatter phase file.
+- Priority 2: đúng 1 entry trong `Verify Commands` có label normalize về lowercase = `baseline`.
+- Không có fallback ngầm ngoài plan artifact/package.
+
+#### waiting_user one-screen contract
+
+Mọi blocker runtime trong Epic mode phải có đủ:
+
+```text
+Error: <short reason>
+Required action: <human action>
+Context: <phase_id/current_step/files>
+Next command: /lp:implement PLAN_<NAME>
+Recovery evidence required: <what to verify before resume>
+```
+
+- Merge conflict bắt buộc có `Conflict files: <list>`.
+- Worktree setup fail phải có guidance `git worktree prune` hoặc manual cleanup git/worktree state.
+- Nhánh `dependency_critical = true` thiếu dependency khai báo phải chuyển `waiting_user`, không fallback tuyến tính.
+
+#### cancel_requested safe boundary
+
+`cancel_requested` chỉ được finalize `cancelled` tại:
+- command-exit boundary
+- step-transition boundary
+- worker-handoff boundary
+
+Không kill giữa command đang chạy.
+
+#### State reconciliation
+
+- `state_version` trong phase notes là mirror từ SQLite.
+- `soft mismatch`: auto-heal từ SQLite + ghi reconciliation note.
+- `hard mismatch`: dừng `waiting_user`, không auto-override.
+
 ### Delivery loop
 
 `/lp:implement` chỉ hoàn tất khi:
@@ -269,7 +308,7 @@ Tập trung vào delta changes so với review trước.
 1. Resolve workflow theo `workflow_id`, `plan_name`, hoặc `plan_file`
 2. Assert `plan_approved = true`
 3. `start-implement`
-4. Pre-implement scope/dependency guard
+4. Pre-implement scope/dependency guard + baseline gate theo contract `baseline_verify_command` -> `baseline` label fallback
 5. Spawn `@implement-plan`
 6. Sync `03-implement-plan.output.contract.json`
 7. Nếu pass, spawn step review-implement (chọn mode: Standard gọi 4 persona agents, Fast gọi `@review-implement`)
@@ -448,5 +487,9 @@ State sync ưu tiên JSON contract.
 
 - `~/.agents/skills/lp-state-manager/SKILL.md` (global skill) hoặc local mirror khi đang dev skill
 - `~/.agents/skills/lp-pipeline-orchestrator/scripts/lp_pipeline.py` (global skill) hoặc local mirror khi đang dev skill
-- `skill `lp-pipeline-orchestrator` (command index)`
+- `.agents/skills/lp-pipeline-orchestrator/references/commands.md` (command index + accessors `single-regression-check.command` / `degraded-design-drift-check.command`)
+- `.agents/skills/lp-pipeline-orchestrator/references/worktree-manager.md`
+- `.agents/skills/lp-pipeline-orchestrator/references/operator-waiting-user-contract.md`
+- `.agents/skills/lp-pipeline-orchestrator/references/phase-notes-template.md`
+- `.agents/skills/lp-pipeline-orchestrator/references/phase-report-template.md`
 - `AGENTS.md (section 6: Decision Gate Policy)` — khi nào dùng `AskUserQuestion` và khi nào không

@@ -1,0 +1,135 @@
+{
+  "plan": "PLAN_LP_PIPELINE_V3",
+  "plan_profile": "standard",
+  "execution_mode": "sequential",
+  "parallel_ready": false,
+  "reason": "Top-level phases share orchestrator/state surfaces; V3 executes sequentially with clear handoff contracts.",
+  "canonical_runtime_root": ".codex",
+  "status_enum": [
+    "pending",
+    "in_progress",
+    "waiting_user",
+    "completed",
+    "failed",
+    "cancelled"
+  ],
+  "execution_boundary": {
+    "allowed": [
+      ".codex/AGENTS.md",
+      ".gitignore",
+      ".agents/skills/lp-pipeline-orchestrator/**",
+      ".agents/skills/lp-plan/SKILL.md",
+      ".agents/skills/lp-implement/SKILL.md",
+      ".agents/skills/lp-cook/SKILL.md",
+      ".agents/skills/create-plan/SKILL.md",
+      ".agents/skills/review-plan/SKILL.md",
+      ".agents/skills/implement-plan/SKILL.md",
+      ".agents/skills/review-implement/SKILL.md",
+      ".agents/skills/qa-automation/SKILL.md",
+      ".agents/skills/vibecode-doctor/SKILL.md",
+      ".agents/skills/close-task/SKILL.md",
+      ".agents/skills/lp-state-manager/SKILL.md",
+      ".agents/skills/lp-state-manager/scripts/state_manager.py",
+      ".agents/skills/tasks/create-plan/TASK.md",
+      ".agents/skills/tasks/review-plan/TASK.md",
+      ".agents/skills/tasks/implement-plan/TASK.md",
+      ".agents/skills/tasks/review-implement/TASK.md",
+      ".agents/skills/tasks/qa-automation/TASK.md",
+      ".agents/skills/tasks/review-spec/TASK.md",
+      ".agents/skills/tasks/create-spec/TASK.md",
+      ".agents/skills/tasks/persona-review/TASK.md"
+    ],
+    "do_not_modify": [
+      "Business code ngoài LP skill/runtime scope",
+      "Runtime root migration sang .agents/plans/*",
+      "Xóa SQLite/state_manager runtime backbone trong V3"
+    ]
+  },
+  "phases": [
+    {
+      "id": "P01",
+      "phase_file": "phase-01-assessment-and-template-foundation.md",
+      "ac_primary": ["AC2", "AC3", "AC17"],
+      "ac_secondary": ["AC1"],
+      "owned_files": [
+        ".agents/skills/lp-pipeline-orchestrator/references/complexity-assessment.md",
+        ".agents/skills/create-plan/references/epic-plan-template.md",
+        ".agents/skills/create-plan/SKILL.md",
+        ".agents/skills/lp-plan/SKILL.md"
+      ]
+    },
+    {
+      "id": "P02",
+      "phase_file": "phase-02-orchestrator-epic-mode-runtime.md",
+      "ac_primary": ["AC1", "AC4", "AC11", "AC14", "AC15"],
+      "ac_secondary": ["AC3", "AC8", "AC10", "AC13", "AC17"],
+      "owned_files": [
+        ".agents/skills/lp-pipeline-orchestrator/SKILL.md",
+        ".agents/skills/lp-pipeline-orchestrator/references/commands.md",
+        ".agents/skills/lp-pipeline-orchestrator/references/worktree-manager.md",
+        ".agents/skills/lp-pipeline-orchestrator/references/operator-waiting-user-contract.md",
+        ".agents/skills/lp-pipeline-orchestrator/scripts/lp_pipeline.py"
+      ]
+    },
+    {
+      "id": "P03",
+      "phase_file": "phase-03-worker-skill-task-alignment.md",
+      "ac_primary": ["AC5", "AC6", "AC7"],
+      "ac_secondary": ["AC9", "AC12"],
+      "owned_files": [
+        ".agents/skills/lp-implement/SKILL.md",
+        ".agents/skills/lp-cook/SKILL.md",
+        ".agents/skills/review-plan/SKILL.md",
+        ".agents/skills/implement-plan/SKILL.md",
+        ".agents/skills/review-implement/SKILL.md",
+        ".agents/skills/qa-automation/SKILL.md",
+        ".agents/skills/tasks/create-plan/TASK.md",
+        ".agents/skills/tasks/review-plan/TASK.md",
+        ".agents/skills/tasks/implement-plan/TASK.md",
+        ".agents/skills/tasks/review-implement/TASK.md",
+        ".agents/skills/tasks/qa-automation/TASK.md",
+        ".agents/skills/tasks/review-spec/TASK.md",
+        ".agents/skills/tasks/create-spec/TASK.md",
+        ".agents/skills/tasks/persona-review/TASK.md"
+      ]
+    },
+    {
+      "id": "P04",
+      "phase_file": "phase-04-phase-state-resume-and-merge.md",
+      "ac_primary": ["AC8", "AC10", "AC13"],
+      "ac_secondary": ["AC4", "AC5", "AC7", "AC11", "AC15"],
+      "owned_files": [
+        ".agents/skills/lp-state-manager/SKILL.md",
+        ".agents/skills/lp-state-manager/scripts/state_manager.py",
+        ".agents/skills/lp-pipeline-orchestrator/SKILL.md",
+        ".agents/skills/lp-pipeline-orchestrator/scripts/lp_pipeline.py",
+        ".agents/skills/lp-pipeline-orchestrator/references/phase-notes-template.md",
+        ".agents/skills/lp-pipeline-orchestrator/references/phase-report-template.md"
+      ]
+    },
+    {
+      "id": "P05",
+      "phase_file": "phase-05-verification-rollout-and-doctor.md",
+      "ac_primary": ["AC9", "AC12", "AC16"],
+      "ac_secondary": ["AC1", "AC6", "AC14"],
+      "owned_files": [
+        ".codex/AGENTS.md",
+        ".gitignore",
+        ".agents/skills/vibecode-doctor/SKILL.md",
+        ".agents/skills/close-task/SKILL.md",
+        ".codex/plans/PLAN_LP_PIPELINE_V3/manifests/benchmark.json"
+      ]
+    }
+  ],
+  "unowned_boundary_items": [],
+  "conflict_prevention": [
+    "P02/P04 cùng chạm orchestrator runtime files -> bắt buộc chạy tuần tự theo dependency graph.",
+    "Không phase nào được đổi runtime root khỏi .codex/*.",
+    "Mọi update status phải dùng enum canonical lowercase; cấm Done/COMPLETED drift.",
+    "Merge conflict recovery output bắt buộc có `Conflict files: <list>` để tránh resume mơ hồ.",
+    "Worktree creation fail phải đưa guidance `git worktree prune` hoặc manual cleanup, không chỉ báo waiting_user generic.",
+    "Nếu `dependency_critical = true` mà thiếu dependencies explicit thì block waiting_user ngay; cấm fallback tuyến tính.",
+    "Branch `broad_context_reports = true` chỉ mở rộng report context trong điều kiện phase-count <= 5; không mở raw notes ngoài direct dependencies.",
+    "`cancel_requested` không được kill giữa command đang chạy; chỉ commit `cancelled` ở safe boundary."
+  ]
+}

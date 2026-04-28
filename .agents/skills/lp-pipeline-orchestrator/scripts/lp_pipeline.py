@@ -93,6 +93,10 @@ SPEC_CLARITY_CHECKLIST = {
     'acceptance': ('acceptance', 'ac', 'given', 'when', 'then', 'definition of done'),
 }
 SPEC_CLARITY_MIN_GROUPS = 4
+PHASE_STATUS_ENUM = {'pending', 'in_progress', 'waiting_user', 'completed', 'failed', 'cancelled'}
+BASELINE_LABEL = 'baseline'
+SINGLE_MODE = 'single'
+EPIC_MODE = 'epic'
 
 
 def print_json(payload: Any) -> None:
@@ -215,11 +219,29 @@ def build_delivery_loop_metadata_patch(
         return patch
 
     if status == 'WAITING_USER':
+        waiting_contract = None
+        if contract and isinstance(contract.get('waiting_user_contract'), dict):
+            waiting_contract = contract.get('waiting_user_contract')
+        elif contract:
+            blockers = contract.get('blockers') or []
+            blocker = str(blockers[0]) if blockers else 'worker requested user input'
+            required_action, recovery = default_waiting_user_guidance(blocker)
+            waiting_contract = build_waiting_user_contract(
+                error=blocker,
+                required_action=required_action,
+                context=f"skill={skill}",
+                plan_name=str(contract.get('plan') or snapshot.get('plan_name') or ''),
+                recovery_evidence_required=recovery,
+                conflict_files=extract_conflict_files(blocker),
+            )
+        if waiting_contract:
+            validate_waiting_user_contract(waiting_contract)
         patch.update(
             {
                 'delivery_loop_pause_for_user': True,
                 'delivery_loop_pause_reason_code': 'waiting-user',
                 'delivery_loop_pause_reason': 'Worker requested user input before continuing delivery loop',
+                'waiting_user_contract': waiting_contract,
             }
         )
     return patch
@@ -251,6 +273,251 @@ def assess_requirement_clarity(requirement: str) -> dict[str, Any]:
         'missing_groups': missing_groups,
         'minimum_required_groups': SPEC_CLARITY_MIN_GROUPS,
     }
+
+
+def parse_markdown_frontmatter(text: str) -> dict[str, str]:
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != '---':
+        return {}
+    result: dict[str, str] = {}
+    for line in lines[1:]:
+        if line.strip() == '---':
+            break
+        if ':' not in line:
+            continue
+        key, value = line.split(':', 1)
+        result[key.strip()] = value.strip()
+    return result
+
+
+def detect_plan_mode(plan_path: Path) -> str:
+    text = plan_path.read_text(encoding='utf-8')
+    explicit = re.search(r'(?im)^\s*mode_decision\s*[:=]\s*(single|epic)\s*$', text)
+    if explicit:
+        return explicit.group(1).lower()
+    phase_files = sorted(plan_path.parent.glob('phase-*.md'))
+    return EPIC_MODE if phase_files else SINGLE_MODE
+
+
+def _extract_baseline_from_json_blocks(text: str) -> list[dict[str, str]]:
+    candidates: list[dict[str, str]] = []
+    for match in re.finditer(r'```json\s*\n(.*?)\n```', text, re.S):
+        payload = match.group(1).strip()
+        try:
+            data = json.loads(payload)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(data, list):
+            continue
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            label = str(item.get('label', '')).strip().lower()
+            command = str(item.get('command', '')).strip()
+            if label == BASELINE_LABEL and command:
+                candidates.append({'source': 'plan-json-block', 'command': command})
+    return candidates
+
+
+def _extract_baseline_from_markdown_lines(text: str) -> list[dict[str, str]]:
+    candidates: list[dict[str, str]] = []
+    for line in text.splitlines():
+        low = line.lower()
+        if BASELINE_LABEL not in low or 'command' not in low:
+            continue
+        match = re.search(r'command\s*[:=]\s*`([^`]+)`', line)
+        if not match:
+            match = re.search(r'command\s*[:=]\s*(.+)$', line)
+        if match:
+            cmd = match.group(1).strip().strip('`').strip()
+            if cmd:
+                candidates.append({'source': 'plan-markdown-line', 'command': cmd})
+    return candidates
+
+
+def resolve_baseline_verify_command(plan_path: Path) -> dict[str, Any]:
+    """Resolve baseline verify command theo contract:
+
+    - Priority 1: baseline_verify_command trong phase frontmatter.
+    - Priority 2: label normalize về lowercase = baseline trong Verify Commands.
+    - Không có fallback ngầm ngoài plan artifact.
+    """
+    phase_candidates: list[dict[str, str]] = []
+    for phase_file in sorted(plan_path.parent.glob('phase-*.md')):
+        frontmatter = parse_markdown_frontmatter(phase_file.read_text(encoding='utf-8'))
+        command = frontmatter.get('baseline_verify_command', '').strip()
+        if command:
+            phase_candidates.append(
+                {'source': f'{phase_file.as_posix()}#frontmatter.baseline_verify_command', 'command': command}
+            )
+    if len(phase_candidates) == 1:
+        return {
+            'status': 'resolved',
+            'source_priority': 1,
+            'source': phase_candidates[0]['source'],
+            'command': phase_candidates[0]['command'],
+        }
+    if len(phase_candidates) > 1:
+        return {
+            'status': 'error',
+            'source_priority': 1,
+            'reason': f'multiple baseline_verify_command entries found ({len(phase_candidates)})',
+            'candidates': phase_candidates,
+        }
+
+    text = plan_path.read_text(encoding='utf-8')
+    plan_candidates = _extract_baseline_from_json_blocks(text)
+    if not plan_candidates:
+        plan_candidates = _extract_baseline_from_markdown_lines(text)
+    if len(plan_candidates) == 1:
+        return {
+            'status': 'resolved',
+            'source_priority': 2,
+            'source': plan_candidates[0]['source'],
+            'command': plan_candidates[0]['command'],
+        }
+    if len(plan_candidates) > 1:
+        return {
+            'status': 'error',
+            'source_priority': 2,
+            'reason': f'multiple baseline label candidates found ({len(plan_candidates)})',
+            'candidates': plan_candidates,
+        }
+    return {
+        'status': 'missing',
+        'reason': 'no baseline_verify_command in phase frontmatter and no unique baseline label in plan verify commands',
+    }
+
+
+def build_waiting_user_contract(
+    *,
+    error: str,
+    required_action: str,
+    context: str,
+    plan_name: str,
+    recovery_evidence_required: str,
+    conflict_files: list[str] | None = None,
+) -> dict[str, Any]:
+    normalized_plan = plan_name.strip()
+    if not normalized_plan or '<' in normalized_plan or '>' in normalized_plan:
+        raise sm.StateManagerError('waiting_user contract requires concrete plan identifier for `Next command`')
+    contract: dict[str, Any] = {
+        'Error': error,
+        'Required action': required_action,
+        'Context': context,
+        'Next command': f'/lp:implement {normalized_plan}',
+        'Recovery evidence required': recovery_evidence_required,
+    }
+    if conflict_files:
+        contract['Conflict files'] = ', '.join(conflict_files)
+    return contract
+
+
+def classify_waiting_user_error(error: str) -> str:
+    low = error.lower()
+    if 'merge conflict' in low:
+        return 'merge-conflict'
+    if 'baseline' in low and ('verify' in low or 'verification' in low) and ('fail' in low or 'error' in low):
+        return 'baseline-verify-fail'
+    if any(token in low for token in ('worktree', 'branch setup', 'branch conflict', 'checkout failed')):
+        return 'worktree-fail'
+    if 'dependency_critical' in low or ('dependency' in low and any(token in low for token in ('missing', 'unresolved', 'blocked'))):
+        return 'dependency-blocker'
+    return 'generic'
+
+
+def default_waiting_user_guidance(error: str) -> tuple[str, str]:
+    kind = classify_waiting_user_error(error)
+    if kind == 'baseline-verify-fail':
+        return (
+            'Update baseline command or fix environment mismatch',
+            'Re-run baseline verification and confirm status changes from WAITING_USER',
+        )
+    if kind == 'worktree-fail':
+        return (
+            'Cleanup git/worktree state (git worktree prune) or manual cleanup',
+            'Re-run worktree/branch setup and confirm status changes from WAITING_USER',
+        )
+    if kind == 'merge-conflict':
+        return (
+            'Resolve conflicts + commit merge result',
+            'Re-run the blocked step and confirm status changes from WAITING_USER',
+        )
+    if kind == 'dependency-blocker':
+        return (
+            'Provide dependency graph/plan metadata so dependency_critical gate can be resolved',
+            'Re-run dependency resolution and verify no linear fallback is used before leaving WAITING_USER',
+        )
+    return (
+        'Provide operator decision or missing dependency information',
+        'Re-run the blocked step and verify contract status changes from WAITING_USER',
+    )
+
+
+def extract_conflict_files(error: str) -> list[str] | None:
+    match = re.search(r'conflict files:\s*(.+)$', error, re.IGNORECASE)
+    if not match:
+        return None
+    parts = [token.strip() for token in match.group(1).split(',') if token.strip()]
+    return parts or None
+
+
+def resolve_lp_implement_command(snapshot: dict[str, Any]) -> str | None:
+    plan_name = str(snapshot.get('plan_name') or '').strip()
+    if plan_name and '<' not in plan_name and '>' not in plan_name:
+        return f'/lp:implement {plan_name}'
+    artifacts = snapshot.get('artifacts') or {}
+    final_plan = ((artifacts.get('final_plan_path') or {}).get('path') or '').strip()
+    if final_plan and '<' not in final_plan and '>' not in final_plan:
+        return f'/lp:implement {final_plan}'
+    return None
+
+
+def validate_waiting_user_contract(payload: dict[str, Any]) -> None:
+    required = {'Error', 'Required action', 'Context', 'Next command', 'Recovery evidence required'}
+    missing = sorted(required - set(payload.keys()))
+    if missing:
+        raise sm.StateManagerError(f'waiting_user contract missing required fields: {missing}')
+    field_values = {key: str(payload.get(key, '')).strip() for key in required}
+    empty_fields = sorted(key for key, value in field_values.items() if not value)
+    if empty_fields:
+        raise sm.StateManagerError(f'waiting_user contract requires non-empty values for: {empty_fields}')
+
+    next_command = field_values['Next command']
+    if '<' in next_command or '>' in next_command:
+        raise sm.StateManagerError('waiting_user `Next command` must be concrete and must not contain placeholders')
+    if not re.fullmatch(r'/lp:implement\s+\S+', next_command):
+        raise sm.StateManagerError('waiting_user `Next command` must follow `/lp:implement <plan_name|plan_file>`')
+
+    error = field_values['Error']
+    required_action = field_values['Required action']
+    context = field_values['Context']
+    recovery = field_values['Recovery evidence required']
+    low_error = error.lower()
+    low_required = required_action.lower()
+
+    if 'merge conflict' in low_error:
+        conflict_files = str(payload.get('Conflict files', '')).strip()
+        if not conflict_files:
+            raise sm.StateManagerError('merge-conflict waiting_user contract must include `Conflict files`')
+        if not all(token in low_required for token in ('resolve', 'conflict')) or 'commit' not in low_required:
+            raise sm.StateManagerError('merge-conflict waiting_user contract must request `resolve conflicts + commit merge result`')
+
+    if 'baseline' in low_error and ('verify' in low_error or 'verification' in low_error) and ('fail' in low_error or 'error' in low_error):
+        baseline_ok = 'baseline' in low_required and any(token in low_required for token in ('update', 'fix', 'mismatch', 'environment'))
+        if not baseline_ok:
+            raise sm.StateManagerError('baseline-fail waiting_user contract must request baseline command/environment correction')
+
+    if any(token in low_error for token in ('worktree', 'branch setup', 'branch conflict', 'checkout failed')):
+        if 'git worktree prune' not in low_required and 'manual cleanup' not in low_required:
+            raise sm.StateManagerError('worktree-fail waiting_user contract must include `git worktree prune` or `manual cleanup` guidance')
+
+    if 'dependency_critical' in low_error or ('dependency' in low_error and any(token in low_error for token in ('missing', 'unresolved', 'blocked'))):
+        combined = f'{required_action} {context} {recovery}'.lower()
+        if 'dependency' not in low_required or not any(token in low_required for token in ('graph', 'metadata')):
+            raise sm.StateManagerError('dependency blocker waiting_user contract must request dependency graph/plan metadata')
+        if 'no linear fallback' not in combined and 'không fallback tuyến tính' not in combined:
+            raise sm.StateManagerError('dependency blocker waiting_user contract must explicitly forbid linear fallback')
 
 
 def find_workflow_by_plan_name(conn, plan_name: str) -> dict[str, Any] | None:
@@ -724,7 +991,8 @@ def command_start_implement(conn, args: argparse.Namespace) -> dict[str, Any]:
         raise sm.StateManagerError(f'Workflow {workflow_id} has spec_created=true but spec_approved=false')
 
     plan_name = snapshot['plan_name']
-    ensure_pipeline_dir(resolve_project_root(args.repo_root), plan_name)
+    repo_root = resolve_project_root(args.repo_root)
+    ensure_pipeline_dir(repo_root, plan_name)
     if args.plan_file:
         sm.set_artifact(
             conn,
@@ -737,6 +1005,25 @@ def command_start_implement(conn, args: argparse.Namespace) -> dict[str, Any]:
                 include_events=False,
             ),
         )
+
+    plan_path = Path(args.plan_file) if args.plan_file else None
+    if plan_path is None:
+        final_plan = snapshot.get('artifacts', {}).get('final_plan_path', {}).get('path')
+        if isinstance(final_plan, str) and final_plan.strip():
+            plan_path = Path(final_plan.strip())
+    if plan_path is None:
+        plan_path = Path('.codex/plans') / plan_name / 'plan.md'
+    if not plan_path.is_absolute():
+        plan_path = (repo_root / plan_path).resolve()
+
+    runtime_mode = SINGLE_MODE
+    baseline_resolution: dict[str, Any] = {'status': 'skipped', 'reason': 'single-mode workflow'}
+    if plan_path.exists():
+        runtime_mode = detect_plan_mode(plan_path)
+        if runtime_mode == EPIC_MODE:
+            baseline_resolution = resolve_baseline_verify_command(plan_path)
+    else:
+        baseline_resolution = {'status': 'missing', 'reason': f'plan file not found: {plan_path}'}
 
     sm.set_gate(
         conn,
@@ -777,7 +1064,12 @@ def command_start_implement(conn, args: argparse.Namespace) -> dict[str, Any]:
             current_step='implement-plan',
             ticket=None,
             requirement=None,
-            metadata_json=None,
+            metadata_json=merge_metadata_payload(
+                {
+                    'implementation_mode': runtime_mode,
+                    'baseline_resolution': baseline_resolution,
+                }
+            ),
             actor=args.actor,
             include_events=args.include_events,
         ),
@@ -796,6 +1088,8 @@ def command_start_implement(conn, args: argparse.Namespace) -> dict[str, Any]:
         ),
     )
     payload = sm.get_workflow_snapshot(conn, workflow_id, include_events=args.include_events)
+    payload['runtime_mode'] = runtime_mode
+    payload['baseline_resolution'] = baseline_resolution
     payload['workspace_warning'] = warn_same_workspace_concurrency(plan_name)
     payload['workspace_policy'] = workspace_policy(plan_name)
     payload['entry_decision'] = derive_entry_decision(payload)
@@ -1272,6 +1566,10 @@ def command_sync_output(conn, args: argparse.Namespace) -> dict[str, Any]:
     status = contract.get('status')
     if not skill or not status:
         raise sm.StateManagerError(f'Output contract missing skill/status: {output_path}')
+    contract_payload = {k: v for k, v in contract.items() if not k.startswith('_')}
+    waiting_payload = contract_payload.get('waiting_user_contract')
+    if isinstance(waiting_payload, dict):
+        validate_waiting_user_contract(waiting_payload)
 
     workflow_id = resolve_workflow_id(conn, args.workflow_id, args.plan_name or contract.get('plan'), args.plan_file)
     snapshot = sm.get_workflow_snapshot(conn, workflow_id, include_events=False)
@@ -1348,7 +1646,7 @@ def command_sync_output(conn, args: argparse.Namespace) -> dict[str, Any]:
             ),
         )
 
-    sync_gates_for_skill(conn, workflow_id, skill, status, args.actor, contract={k: v for k, v in contract.items() if not k.startswith('_')})
+    sync_gates_for_skill(conn, workflow_id, skill, status, args.actor, contract=contract_payload)
     sm.append_event_record(
         conn,
         workflow_id=workflow_id,
@@ -1476,12 +1774,15 @@ def command_start_debug(conn, args: argparse.Namespace) -> dict[str, Any]:
 def command_status(conn, args: argparse.Namespace) -> dict[str, Any]:
     workflow_id = resolve_workflow_id(conn, args.workflow_id, args.plan_name, args.plan_file)
     snapshot = sm.get_workflow_snapshot(conn, workflow_id, include_events=args.include_events)
+    metadata = snapshot.get('metadata') or {}
     next_info = sm.resolve_next(conn, argparse.Namespace(workflow_id=workflow_id, plan_name=None))
     delivery_next = compute_delivery_next(snapshot)
     return {
         'workflow': snapshot,
         'next': next_info,
         'delivery_next': delivery_next,
+        'runtime_mode': metadata.get('implementation_mode', SINGLE_MODE),
+        'baseline_resolution': metadata.get('baseline_resolution'),
         'entry_decision': derive_entry_decision(snapshot),
         'workspace_policy': workspace_policy(snapshot['plan_name']),
         'workspace_warning': warn_same_workspace_concurrency(snapshot['plan_name']),
@@ -1491,6 +1792,7 @@ def command_status(conn, args: argparse.Namespace) -> dict[str, Any]:
 def command_resume(conn, args: argparse.Namespace) -> dict[str, Any]:
     workflow_id = resolve_workflow_id(conn, args.workflow_id, args.plan_name, args.plan_file)
     snapshot = sm.get_workflow_snapshot(conn, workflow_id, include_events=False)
+    metadata = snapshot.get('metadata') or {}
     next_info = sm.resolve_next(conn, argparse.Namespace(workflow_id=workflow_id, plan_name=None))
     delivery_next = compute_delivery_next(snapshot)
 
@@ -1502,6 +1804,8 @@ def command_resume(conn, args: argparse.Namespace) -> dict[str, Any]:
         'reason': next_info['reason'],
         'next_step': next_info['next_step'],
         'delivery_next': delivery_next,
+        'runtime_mode': metadata.get('implementation_mode', SINGLE_MODE),
+        'baseline_resolution': metadata.get('baseline_resolution'),
         'entry_decision': derive_entry_decision(snapshot),
         'workspace_policy': workspace_policy(snapshot['plan_name']),
         'workspace_warning': warn_same_workspace_concurrency(snapshot['plan_name']),
@@ -1528,7 +1832,9 @@ def compute_delivery_next(snapshot: dict[str, Any]) -> dict[str, Any]:
     fail_count = coerce_int(metadata.get('delivery_loop_fail_count'), 0)
     max_retries = coerce_int(metadata.get('delivery_loop_max_retries'), DELIVERY_LOOP_MAX_RETRIES)
     pause_for_user = coerce_bool(metadata.get('delivery_loop_pause_for_user'))
+    cancel_requested = coerce_bool(metadata.get('cancel_requested'))
     pause_reason = metadata.get('delivery_loop_pause_reason')
+    resume_command = resolve_lp_implement_command(snapshot)
     has_delivery_failure = any(
         steps.get(step_name) and steps[step_name]['status'] in {'FAIL', 'NEEDS_REVISION'}
         for step_name in DELIVERY_LOOP_SKILLS
@@ -1562,18 +1868,33 @@ def compute_delivery_next(snapshot: dict[str, Any]) -> dict[str, Any]:
             'recommended_command': command,
         }
 
+    if cancel_requested:
+        running_steps = [step['skill'] for step in snapshot['steps'] if step['status'] == 'RUNNING']
+        if running_steps:
+            running = ', '.join(running_steps)
+            return response(
+                None,
+                f'cancel_requested is set; waiting safe boundary (command-exit) for running step(s): {running}',
+                None,
+            )
+        return response(
+            None,
+            'cancel_requested reached safe boundary; operator may transition phase/workflow to cancelled',
+            resume_command,
+        )
+
     if pause_for_user:
         return response(
             None,
             pause_reason or 'delivery loop paused; user confirmation is required before continuing',
-            '/lp:implement <plan_file>',
+            resume_command,
         )
 
     if has_delivery_failure and fail_count >= max_retries:
         return response(
             None,
             f'delivery fix loop reached max retries ({max_retries}); user confirmation is required',
-            '/lp:implement <plan_file>',
+            resume_command,
         )
 
     for step_name in ['implement-plan', 'review-implement', 'qa-automation', 'close-task']:
@@ -1586,11 +1907,11 @@ def compute_delivery_next(snapshot: dict[str, Any]) -> dict[str, Any]:
     qa = steps.get('qa-automation')
 
     if implement and implement['status'] == 'FAIL':
-        return response('implement-plan', 'implement-plan failed; retry implementation loop', '/lp:implement <plan_file>')
+        return response('implement-plan', 'implement-plan failed; retry implementation loop', resume_command)
     if review and review['status'] in {'FAIL', 'NEEDS_REVISION'}:
-        return response('implement-plan', 'review-implement requested code changes', '/lp:implement <plan_file>')
+        return response('implement-plan', 'review-implement requested code changes', resume_command)
     if qa and qa['status'] == 'FAIL':
-        return response('implement-plan', 'qa-automation failed; return to implementation loop', '/lp:implement <plan_file>')
+        return response('implement-plan', 'qa-automation failed; return to implementation loop', resume_command)
     if gates.get('implementation_done') and not gates.get('implementation_review_passed'):
         return response('review-implement', 'implementation done; review required', '@review-implement')
     if gates.get('implementation_review_passed') and not gates.get('qa_passed'):
@@ -1604,7 +1925,7 @@ def compute_delivery_next(snapshot: dict[str, Any]) -> dict[str, Any]:
     if steps.get('implement-plan') and steps['implement-plan']['status'] == 'PASS':
         return response('review-implement', 'implementation finished; start review loop', '@review-implement')
     if steps.get('implement-plan'):
-        return response('implement-plan', 'implementation step pending or not completed', '/lp:implement <plan_file>')
+        return response('implement-plan', 'implementation step pending or not completed', resume_command)
     return response(None, 'delivery loop not initialized', None)
 
 

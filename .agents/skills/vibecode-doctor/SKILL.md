@@ -40,6 +40,10 @@ python ~/.codex/scripts/vibecode_doctor.py
 - GitNexus CLI/index readiness mức first-pass
 - LP script availability (`state_manager.py`, `lp_pipeline.py`, `validate_contract.py`)
 - manifest/script surface có tồn tại để tiếp tục bootstrap/readiness flow hay không
+- readiness state rõ ràng: `READY` hoặc `DEGRADED`
+- accessor contract references trong `lp-pipeline-orchestrator/references/commands.md`:
+  - `single-regression-check.command`
+  - `degraded-design-drift-check.command`
 
 ## Output mong đợi
 
@@ -56,3 +60,4 @@ python ~/.codex/scripts/vibecode_doctor.py
 - Nếu doctor báo GitNexus chưa ready hoặc repo chưa indexed, ưu tiên bootstrap/analyze cho xong trước khi vào task lớn.
 - Nếu doctor báo legacy mirrors cùng tồn tại, resolve canonical path manifest trước khi đọc/sửa skill.
 - Doctor này là first-pass check; không coi nó là bằng chứng rằng MCP exposure hoặc doc/script semantic sync đã được verify đầy đủ.
+- Khi doctor trả `DEGRADED`, phải nêu rõ degraded reason trong report runtime trước khi fallback read/search thủ công.

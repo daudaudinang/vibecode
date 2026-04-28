@@ -1,0 +1,87 @@
+{
+  "plan": "PLAN_LP_PIPELINE_V3",
+  "execution_mode": "sequential",
+  "plan_profile": "standard",
+  "status_enum": [
+    "pending",
+    "in_progress",
+    "waiting_user",
+    "completed",
+    "failed",
+    "cancelled"
+  ],
+  "nodes": [
+    {
+      "id": "P01",
+      "name": "Assessment and template foundation",
+      "phase_file": "phase-01-assessment-and-template-foundation.md",
+      "ac_primary": ["AC2", "AC3", "AC17"],
+      "ac_secondary": ["AC1"]
+    },
+    {
+      "id": "P02",
+      "name": "Orchestrator epic mode runtime",
+      "phase_file": "phase-02-orchestrator-epic-mode-runtime.md",
+      "ac_primary": ["AC1", "AC4", "AC11", "AC14", "AC15"],
+      "ac_secondary": ["AC3", "AC8", "AC10", "AC13", "AC17"]
+    },
+    {
+      "id": "P03",
+      "name": "Worker skill task alignment",
+      "phase_file": "phase-03-worker-skill-task-alignment.md",
+      "ac_primary": ["AC5", "AC6", "AC7"],
+      "ac_secondary": ["AC9", "AC12"]
+    },
+    {
+      "id": "P04",
+      "name": "Phase state resume and merge",
+      "phase_file": "phase-04-phase-state-resume-and-merge.md",
+      "ac_primary": ["AC8", "AC10", "AC13"],
+      "ac_secondary": ["AC4", "AC5", "AC7", "AC11", "AC15"]
+    },
+    {
+      "id": "P05",
+      "name": "Verification rollout and doctor",
+      "phase_file": "phase-05-verification-rollout-and-doctor.md",
+      "ac_primary": ["AC9", "AC12", "AC16"],
+      "ac_secondary": ["AC1", "AC6", "AC14"]
+    }
+  ],
+  "edges": [
+    {
+      "from": "P01",
+      "to": "P02",
+      "type": "hard",
+      "reason": "Epic template + complexity contracts phải chốt trước orchestrator runtime wiring"
+    },
+    {
+      "from": "P02",
+      "to": "P03",
+      "type": "hard",
+      "reason": "Worker/task alignment phụ thuộc orchestration contracts (mode split, waiting_user output, baseline gate)"
+    },
+    {
+      "from": "P03",
+      "to": "P04",
+      "type": "hard",
+      "reason": "State/resume enforcement finalize sau khi worker contract wording đã ổn định"
+    },
+    {
+      "from": "P04",
+      "to": "P05",
+      "type": "hard",
+      "reason": "Final verification cần runtime state contracts hoàn chỉnh"
+    }
+  ],
+  "critical_path": ["P01", "P02", "P03", "P04", "P05"],
+  "parallel_groups": [],
+  "notes": [
+    "AC11 được split ownership: orchestrator behavior ở P02, state transition authority ở P04.",
+    "AC12 owner chính ở P05 để final integration QA commands có schema parseable + fail-fast runtime execution.",
+    "AC10 merge-conflict recovery contract phải có explicit field `Conflict files: <list>` trước khi cho phép resume hook.",
+    "Worktree creation fail path phải hướng dẫn rõ `git worktree prune` hoặc manual cleanup git/worktree state.",
+    "Nếu `dependency_critical = true` mà dependency graph chưa khai báo đủ thì bắt buộc `waiting_user`, không fallback tuyến tính.",
+    "Branch `broad_context_reports = true` chỉ mở rộng đọc report completed phases khi tổng phase <= 5; raw notes ngoài direct dependency vẫn bị cấm.",
+    "`cancel_requested` chỉ được chuyển phase sang `cancelled` tại safe boundary (command-exit / step-transition / worker-handoff)."
+  ]
+}

@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "skill": "create-plan",
+  "plan": "PLAN_LP_PIPELINE_V3",
+  "plan_path": ".codex/plans/PLAN_LP_PIPELINE_V3/plan.md",
+  "plan_profile": "standard",
+  "phase_files": [
+    ".codex/plans/PLAN_LP_PIPELINE_V3/phase-01-assessment-and-template-foundation.md",
+    ".codex/plans/PLAN_LP_PIPELINE_V3/phase-02-orchestrator-epic-mode-runtime.md",
+    ".codex/plans/PLAN_LP_PIPELINE_V3/phase-03-worker-skill-task-alignment.md",
+    ".codex/plans/PLAN_LP_PIPELINE_V3/phase-04-phase-state-resume-and-merge.md",
+    ".codex/plans/PLAN_LP_PIPELINE_V3/phase-05-verification-rollout-and-doctor.md"
+  ],
+  "owned_files": [
+    ".codex/AGENTS.md",
+    ".gitignore",
+    ".agents/skills/lp-pipeline-orchestrator/SKILL.md",
+    ".agents/skills/lp-pipeline-orchestrator/references/commands.md",
+    ".agents/skills/lp-pipeline-orchestrator/references/worktree-manager.md",
+    ".agents/skills/lp-pipeline-orchestrator/references/operator-waiting-user-contract.md",
+    ".agents/skills/lp-pipeline-orchestrator/references/phase-notes-template.md",
+    ".agents/skills/lp-pipeline-orchestrator/references/phase-report-template.md",
+    ".agents/skills/lp-pipeline-orchestrator/references/complexity-assessment.md",
+    ".agents/skills/lp-pipeline-orchestrator/scripts/lp_pipeline.py",
+    ".agents/skills/lp-state-manager/SKILL.md",
+    ".agents/skills/lp-state-manager/scripts/state_manager.py",
+    ".agents/skills/lp-plan/SKILL.md",
+    ".agents/skills/lp-implement/SKILL.md",
+    ".agents/skills/lp-cook/SKILL.md",
+    ".agents/skills/create-plan/SKILL.md",
+    ".agents/skills/create-plan/references/epic-plan-template.md",
+    ".agents/skills/review-plan/SKILL.md",
+    ".agents/skills/implement-plan/SKILL.md",
+    ".agents/skills/review-implement/SKILL.md",
+    ".agents/skills/qa-automation/SKILL.md",
+    ".agents/skills/vibecode-doctor/SKILL.md",
+    ".agents/skills/close-task/SKILL.md",
+    ".agents/skills/tasks/create-plan/TASK.md",
+    ".agents/skills/tasks/review-plan/TASK.md",
+    ".agents/skills/tasks/implement-plan/TASK.md",
+    ".agents/skills/tasks/review-implement/TASK.md",
+    ".agents/skills/tasks/qa-automation/TASK.md",
+    ".agents/skills/tasks/review-spec/TASK.md",
+    ".agents/skills/tasks/create-spec/TASK.md",
+    ".agents/skills/tasks/persona-review/TASK.md",
+    ".codex/plans/PLAN_LP_PIPELINE_V3/manifests/benchmark.json"
+  ],
+  "dependencies": [
+    {
+      "from": "P01",
+      "to": "P02"
+    },
+    {
+      "from": "P02",
+      "to": "P03"
+    },
+    {
+      "from": "P03",
+      "to": "P04"
+    },
+    {
+      "from": "P04",
+      "to": "P05"
+    }
+  ],
+  "status": "PASS",
+  "timestamp": "2026-04-24T12:44:46+07:00",
+  "duration_ms": 840000,
+  "duration_min": 14,
+  "artifacts": {
+    "primary": ".codex/plans/PLAN_LP_PIPELINE_V3/plan.md",
+    "secondary": [
+      ".codex/plans/PLAN_LP_PIPELINE_V3/phase-01-assessment-and-template-foundation.md",
+      ".codex/plans/PLAN_LP_PIPELINE_V3/phase-02-orchestrator-epic-mode-runtime.md",
+      ".codex/plans/PLAN_LP_PIPELINE_V3/phase-03-worker-skill-task-alignment.md",
+      ".codex/plans/PLAN_LP_PIPELINE_V3/phase-04-phase-state-resume-and-merge.md",
+      ".codex/plans/PLAN_LP_PIPELINE_V3/phase-05-verification-rollout-and-doctor.md",
+      ".codex/plans/PLAN_LP_PIPELINE_V3/manifests/ownership.json",
+      ".codex/plans/PLAN_LP_PIPELINE_V3/manifests/dependency-graph.json",
+      ".codex/plans/PLAN_LP_PIPELINE_V3/manifests/benchmark.json",
+      ".codex/pipeline/PLAN_LP_PIPELINE_V3/01-create-plan.output.md"
+    ]
+  },
+  "next": {
+    "recommended_skill": "review-plan",
+    "input_for_next": ".codex/plans/PLAN_LP_PIPELINE_V3/plan.md",
+    "handoff_note": "Finalize revise completed: waiting_user contract now enforces Conflict files for merge conflicts, worktree-fail guidance includes prune/manual cleanup, dependency_critical and broad_context_reports branches are operationalized, and cancel_requested safe-boundary semantics are explicitly defined."
+  },
+  "plan_artifacts": {
+    "final_plan_path": ".codex/plans/PLAN_LP_PIPELINE_V3/plan.md",
+    "plan_root_path": ".codex/plans/PLAN_LP_PIPELINE_V3",
+    "ownership_manifest_path": ".codex/plans/PLAN_LP_PIPELINE_V3/manifests/ownership.json",
+    "dependency_graph_path": ".codex/plans/PLAN_LP_PIPELINE_V3/manifests/dependency-graph.json",
+    "benchmark_manifest_path": ".codex/plans/PLAN_LP_PIPELINE_V3/manifests/benchmark.json"
+  },
+  "blockers": [],
+  "pending_questions": {
+    "questions": [],
+    "resume_from": null,
+    "user_answers": null
+  }
+}

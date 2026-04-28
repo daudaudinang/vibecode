@@ -402,6 +402,7 @@ KHÔNG spawn subagent trừ khi lợi ích rõ ràng và không thể thay thế
 - After logic changes, run the smallest relevant test command that gives real evidence.
 - Do not use fake data, cheats, or temporary hacks just to pass tests/builds.
 - If you update docs or pipeline/task artifacts, read them back to verify the written content matches intent.
+- Với LP Pipeline V3, giữ section `Final Integration Verify Commands` parseable và đồng bộ với accessor keys `single-regression-check.command` + `degraded-design-drift-check.command` trong `lp-pipeline-orchestrator/references/commands.md`.
 
 ## Orchestration discipline
 

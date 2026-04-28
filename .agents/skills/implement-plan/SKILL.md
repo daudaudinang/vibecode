@@ -35,12 +35,16 @@ Triển khai 1 plan hoặc 1 phase thành code đúng boundary, đúng ownership
 - Chỉ sửa owned files / allowed files của phase hiện tại
 - Nếu touched files vượt boundary, phải report `scope_violation`
 - Không claim completion nếu dependency phase chưa pass mà phase hiện tại phụ thuộc vào nó
+- Nếu `dependency_critical = true` nhưng dependencies thiếu/không rõ, phải trả `WAITING_USER`; không fallback tuyến tính
 
 ## Verification rules
 
 - Chạy verify commands hoặc test/lint liên quan thật sự
 - Chỉ report `PASS` khi có evidence
 - Nếu bị block bởi missing decision hoặc external dependency, trả `WAITING_USER` hoặc `FAIL` với blocker rõ ràng
+- Epic phase phải cập nhật phase notes/report theo template, nhưng chỉ mirror các field runtime (`status/current_step/retry_count/state_version`) từ SQLite
+- Context cho phase hiện tại mặc định lấy từ direct dependency phases; không đọc raw notes ngoài direct dependency
+- Nếu bật `broad_context_reports = true` và phase-count `<= 5`, có thể đọc thêm completed reports theo thứ tự phase index tăng dần
 
 ## Output contract expectations
 

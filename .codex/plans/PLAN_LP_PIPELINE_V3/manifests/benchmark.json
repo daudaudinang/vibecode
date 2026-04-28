@@ -1,0 +1,33 @@
+{
+  "plan": "PLAN_LP_PIPELINE_V3",
+  "window_days": 30,
+  "metrics": [
+    {
+      "name": "resume_success_rate",
+      "label": "Epic resume success rate",
+      "formula": "successful_epic_resumes / total_epic_resume_attempts",
+      "baseline": "from first 5 internal V3 dry-runs",
+      "target": ">= 0.80",
+      "owner": "LP Orchestrator Maintainer",
+      "data_source": "workflow event log + SQLite resume records"
+    },
+    {
+      "name": "spec_drift_reopen_rate",
+      "label": "Spec drift reopen rate",
+      "formula": "epic_phases_reopened_due_to_spec_gap / total_epic_phases_started",
+      "baseline": "from first 5 internal V3 dry-runs",
+      "target": "<= 0.15",
+      "owner": "Spec Process Owner",
+      "data_source": "review outputs + workflow state"
+    },
+    {
+      "name": "stale_phase_artifact_count",
+      "label": "Runtime artifact hygiene count",
+      "formula": "leftover_phase_worktrees + leftover_phase_branches + stale_phase_notes_after_completed_runs",
+      "baseline": "from first 5 internal V3 dry-runs",
+      "target": "= 0",
+      "owner": "Repository Runtime Operator",
+      "data_source": "git state + .worktrees + .codex/plans phase artifact audit"
+    }
+  ]
+}

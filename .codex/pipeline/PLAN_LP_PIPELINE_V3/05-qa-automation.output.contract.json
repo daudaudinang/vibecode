@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "skill": "qa-automation",
+  "plan": "PLAN_LP_PIPELINE_V3",
+  "ticket": null,
+  "status": "PASS",
+  "timestamp": "2026-04-24T19:29:08+07:00",
+  "duration_min": 7,
+  "artifacts": {
+    "primary": ".codex/pipeline/PLAN_LP_PIPELINE_V3/05-qa-automation.output.md",
+    "secondary": [
+      ".codex/pipeline/PLAN_LP_PIPELINE_V3/evidence/qa-final-integration-runs.json",
+      ".codex/pipeline/PLAN_LP_PIPELINE_V3/evidence/qa-priority-checks.json"
+    ]
+  },
+  "next": {
+    "recommended_skill": "close-task",
+    "input_for_next": ".codex/plans/PLAN_LP_PIPELINE_V3/plan.md",
+    "handoff_note": "QA re-run PASS after implement retry + fast-mode review PASS; AC12 full ordered command contract is now green."
+  },
+  "blockers": [],
+  "pending_questions": {
+    "questions": [],
+    "resume_from": null,
+    "user_answers": null
+  }
+}

@@ -173,3 +173,32 @@ python ~/.agents/skills/lp-state-manager/scripts/state_manager.py resolve-next \
 1. `create-workflow --mode debug`
 2. `upsert-step debug-investigator --status RUNNING|PASS|WAITING_USER|FAIL`
 3. lane này là standalone investigation; sau khi PASS thì orchestrator tự quyết định bước tiếp theo
+
+## Epic phase runtime helpers
+
+Các command bổ sung cho phase-level state (Epic mode):
+
+```bash
+python ~/.agents/skills/lp-state-manager/scripts/state_manager.py upsert-phase-state \
+  --workflow-id WF_20260409_000001 \
+  --phase-id P02 \
+  --status in_progress \
+  --current-step implement-plan \
+  --state-version 3
+
+python ~/.agents/skills/lp-state-manager/scripts/state_manager.py list-phase-states \
+  --workflow-id WF_20260409_000001
+
+python ~/.agents/skills/lp-state-manager/scripts/state_manager.py resolve-phase-resume \
+  --workflow-id WF_20260409_000001
+```
+
+Quy tắc deterministic resume selector:
+- Ưu tiên `waiting_user` -> `in_progress` -> `pending`
+- Chỉ chọn phase có dependencies satisfied
+- Nếu `dependency_critical = true` mà dependencies thiếu/không rõ -> trả `waiting_user`, không fallback tuyến tính
+
+Reconciliation semantics:
+- `state_version` trong phase notes chỉ là mirror từ SQLite authority
+- `soft mismatch` => auto-heal mirror
+- `hard mismatch` => dừng `waiting_user` để operator xử lý

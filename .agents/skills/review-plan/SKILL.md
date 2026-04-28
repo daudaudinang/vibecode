@@ -67,6 +67,9 @@ Luôn review thêm các câu hỏi này:
 - source-of-truth hierarchy có rõ giữa plan files, artifacts, DB state, và active-plan pointer không?
 - runtime invariants có nhất quán giữa orchestrator doc, worker skills, plan text, và manifests không?
 - nếu có drift giữa các artifact trên, review có chặn pass rõ ràng không?
+- plan có mô tả rõ phase runtime enum lowercase (`pending | in_progress | waiting_user | completed | failed | cancelled`) khi bật Epic mode không?
+- branch `dependency_critical = true` có behavior explicit `waiting_user` (không fallback tuyến tính) không?
+- branch `broad_context_reports = true` có nêu rõ guard `phase-count <= 5` và ordering tăng dần không?
 
 ### Với standard plan
 

@@ -23,6 +23,9 @@ Chạy autopilot canonical của LittlePea: spec loop -> planning loop -> delive
 - Retry loop bị giới hạn ở runtime/state layer
 - Benchmark artifacts được ghi lại
 - Direct edit trong workspace hiện tại; worktree chỉ khi user explicit yêu cầu
+- Epic mode giữ phase notes/report để handoff context giữa các phase
+- Context read mặc định theo direct dependency; chỉ mở rộng theo `broad_context_reports = true` khi phase-count `<= 5`
+- Nếu gặp phase `dependency_critical = true` thiếu dependencies explicit thì dừng `waiting_user`, không fallback tuyến tính
 
 ## Expected artifacts
 

@@ -39,3 +39,7 @@ Thực thi delivery loop canonical của LittlePea trên plan đã approved.
 - Worker `implement-plan` không phải source of truth cho full delivery loop
 - Direct edit là mode canonical; không auto spawn agent trong worktree
 - Top-level LP agents phải chạy foreground; không dùng background
+- Khi chạy Epic mode, phase runtime enum dùng dạng lowercase: `pending | in_progress | waiting_user | completed | failed | cancelled`
+- Context propagation mặc định chỉ đọc artifacts của direct dependency phases; không đọc raw notes ngoài direct dependency
+- Nếu plan bật `broad_context_reports = true` và tổng phase `<= 5`, cho phép đọc thêm report của completed phases theo thứ tự phase index tăng dần
+- Nếu phase có `dependency_critical = true` nhưng dependencies thiếu/không rõ, phải chuyển `waiting_user`; không fallback tuyến tính

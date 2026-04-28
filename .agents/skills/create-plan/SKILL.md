@@ -22,6 +22,8 @@ Tạo 1 plan canonical cho LittlePea, đủ artifact để orchestrator review, 
 - `.codex/plans/PLAN_<NAME>/spec.md` nếu tồn tại (source of truth nghiệp vụ/UX)
 - Context codebase liên quan
 - Nếu có: ticket/workflow metadata từ orchestrator
+- Rubric tham chiếu mode decision: `.agents/skills/lp-pipeline-orchestrator/references/complexity-assessment.md`
+- Epic template tham chiếu: `.agents/skills/create-plan/references/epic-plan-template.md`
 
 
 ## Planning model
@@ -82,6 +84,7 @@ Pipeline output:
 - `ownership.json` phải mô tả ownership/no-overlap khi plan parallel-ready
 - `dependency-graph.json` phải mô tả phase dependencies nếu có parallelization
 - `.codex/active-plan` được phép tồn tại như pointer, nhưng phải trỏ về `.codex/plans/PLAN_<NAME>/`
+- Nếu có mention `.agents/plans/PLAN_<NAME>/`, phải nêu rõ đó chỉ là **design workspace reference**, không phải runtime publish path.
 
 ## Output contract expectations
 

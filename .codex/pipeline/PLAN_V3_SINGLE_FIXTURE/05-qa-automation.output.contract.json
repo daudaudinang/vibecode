@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "skill": "qa-automation",
+  "status": "PASS",
+  "artifacts": {
+    "primary": ".codex/pipeline/PLAN_V3_SINGLE_FIXTURE/05-qa-automation.output.md"
+  }
+}

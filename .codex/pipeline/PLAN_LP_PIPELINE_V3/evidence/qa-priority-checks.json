@@ -1,0 +1,37 @@
+{
+  "compute_delivery_next": {
+    "qa_done": {
+      "action": "close-task",
+      "reason": "QA passed; ready to close task",
+      "recommended_command": "@close-task"
+    },
+    "cancel_boundary": {
+      "action": null,
+      "reason": "cancel_requested reached safe boundary; operator may transition phase/workflow to cancelled",
+      "recommended_command": "/lp:implement PLAN_LP_PIPELINE_V3"
+    }
+  },
+  "dependency_critical_resume": {
+    "workflow_id": "WF_QA_PLAN_V3",
+    "can_proceed": false,
+    "reason": "dependency_critical = true but dependencies unresolved for P02: unresolved=['P01:failed']",
+    "next_phase_id": "P02",
+    "next_status": "waiting_user"
+  },
+  "waiting_user_contract": {
+    "valid_contract": "pass",
+    "invalid_placeholder_error": "waiting_user `Next command` must be concrete and must not contain placeholders"
+  },
+  "namespace_docs_consistency": {
+    "legacy_returncode": 1,
+    "public_returncode": 0,
+    "public_matches": [
+      ".agents/skills/qa-automation/SKILL.md:16:/lp:qa-automation <AC_LIST_OR_TICKET>",
+      ".agents/skills/qa-automation/SKILL.md:37:/lp:qa-automation \"Seller login redirects to dashboard\"",
+      ".agents/skills/qa-automation/SKILL.md:38:/lp:qa-automation \"B2B-157\"  # reads AC from plan file",
+      ".agents/skills/qa-automation/SKILL.md:51:When Orchestrator receives `/lp:qa-automation`, invoke agent (via `@agent-name`) with:",
+      ".agents/skills/review-implement/SKILL.md:13:/lp:review-implement <plan_file_path>",
+      ".agents/skills/review-implement/SKILL.md:82:When Orchestrator receives `/lp:review-implement`, orchestrator phải coi đây là worker review step canonical."
+    ]
+  }
+}

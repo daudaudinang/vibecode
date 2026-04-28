@@ -44,3 +44,4 @@ Canonical flow dừng sau `review-plan` và chờ user gate trước khi impleme
 - Khi skill này được gọi, phải follow orchestration policy trong `lp-pipeline-orchestrator`
 - Không mô tả full orchestration logic ở file này
 - Direct edit là mode canonical; không auto spawn agent trong worktree
+- Runtime root canonical luôn là `.codex/*`; mọi path `.agents/plans/*` chỉ được phép dùng như design workspace reference.

@@ -22,6 +22,7 @@ STATE_MANAGER_EXAMPLES = {
 }
 VALID_WORKFLOW_STATUSES = {'ACTIVE', 'WAITING_USER', 'COMPLETED', 'FAILED', 'BLOCKED'}
 VALID_STEP_STATUSES = {'PENDING', 'RUNNING', 'PASS', 'FAIL', 'NEEDS_REVISION', 'WAITING_USER', 'SKIPPED'}
+VALID_PHASE_RUNTIME_STATUSES = {'pending', 'in_progress', 'waiting_user', 'completed', 'failed', 'cancelled'}
 PHASE_BY_STEP = {
     'jira-workflow-bridge': 'intake',
     'debug-investigator': 'debug',
@@ -74,6 +75,15 @@ V2_SCHEMA_NOTES = {
     'artifact_root_pattern': '.codex/pipeline/<PLAN_NAME>/',
     'child_job_root_pattern': '.codex/pipeline/<PLAN_NAME>/RUN_<ID>/child-jobs/JOB_<ID>/',
 }
+
+
+def validate_phase_runtime_status(status: str) -> str:
+    normalized = status.strip().lower()
+    if normalized not in VALID_PHASE_RUNTIME_STATUSES:
+        raise StateManagerError(
+            f'Invalid phase runtime status: {status}. Expected one of {sorted(VALID_PHASE_RUNTIME_STATUSES)}'
+        )
+    return normalized
 
 
 def normalize_relative_artifact_path(path: str) -> str:
@@ -355,6 +365,7 @@ def connect(db_path: Path) -> sqlite3.Connection:
         if current_version < SCHEMA_VERSION:
             ensure_schema(conn)
             conn.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')
+        ensure_phase_runtime_schema(conn)
         yield conn
         conn.commit()
     except Exception:
@@ -362,6 +373,32 @@ def connect(db_path: Path) -> sqlite3.Connection:
         raise
     finally:
         conn.close()
+
+
+def ensure_phase_runtime_schema(conn: sqlite3.Connection) -> None:
+    conn.executescript(
+        '''
+        CREATE TABLE IF NOT EXISTS phase_runtime_state (
+          workflow_id TEXT NOT NULL,
+          phase_id TEXT NOT NULL,
+          status TEXT NOT NULL,
+          current_step TEXT,
+          retry_count INTEGER NOT NULL DEFAULT 0,
+          state_version INTEGER NOT NULL DEFAULT 1,
+          dependency_critical INTEGER NOT NULL DEFAULT 0,
+          dependencies_json TEXT NOT NULL DEFAULT '[]',
+          cancel_requested INTEGER NOT NULL DEFAULT 0,
+          notes_path TEXT,
+          report_path TEXT,
+          updated_at TEXT NOT NULL,
+          PRIMARY KEY (workflow_id, phase_id),
+          FOREIGN KEY (workflow_id) REFERENCES workflows(workflow_id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_phase_runtime_state_workflow_status
+        ON phase_runtime_state(workflow_id, status, updated_at);
+        '''
+    )
 
 
 def ensure_schema(conn: sqlite3.Connection) -> None:
@@ -1333,6 +1370,17 @@ def get_workflow_snapshot(conn: sqlite3.Connection, workflow_id: str, include_ev
         ''',
         (workflow_id,),
     ).fetchall()
+    phase_rows = conn.execute(
+        '''
+        SELECT phase_id, status, current_step, retry_count, state_version,
+               dependency_critical, dependencies_json, cancel_requested,
+               notes_path, report_path, updated_at
+        FROM phase_runtime_state
+        WHERE workflow_id = ?
+        ORDER BY phase_id
+        ''',
+        (workflow_id,),
+    ).fetchall()
 
     snapshot = {
         'schema_version': workflow['schema_version'],
@@ -1367,6 +1415,22 @@ def get_workflow_snapshot(conn: sqlite3.Connection, workflow_id: str, include_ev
                 'metadata': json_loads(row['metadata_json'], {}),
             }
             for row in step_rows
+        ],
+        'phase_runtime_state': [
+            {
+                'phase_id': row['phase_id'],
+                'status': row['status'],
+                'current_step': row['current_step'],
+                'retry_count': row['retry_count'],
+                'state_version': row['state_version'],
+                'dependency_critical': bool(row['dependency_critical']),
+                'dependencies': json_loads(row['dependencies_json'], []),
+                'cancel_requested': bool(row['cancel_requested']),
+                'notes_path': row['notes_path'],
+                'report_path': row['report_path'],
+                'updated_at': row['updated_at'],
+            }
+            for row in phase_rows
         ],
     }
 
@@ -1782,6 +1846,178 @@ def validate_transition(conn: sqlite3.Connection, args: argparse.Namespace) -> d
     return result
 
 
+def upsert_phase_state(conn: sqlite3.Connection, args: argparse.Namespace) -> dict[str, Any]:
+    ensure_workflow_exists(conn, args.workflow_id)
+    status = validate_phase_runtime_status(args.status)
+    dependencies = json_loads(args.dependencies_json, []) if args.dependencies_json else []
+    if not isinstance(dependencies, list):
+        raise StateManagerError('dependencies_json must decode to a list')
+    normalized_deps = [str(dep).strip() for dep in dependencies if str(dep).strip()]
+    ts = now_iso()
+    conn.execute(
+        '''
+        INSERT INTO phase_runtime_state (
+          workflow_id, phase_id, status, current_step, retry_count, state_version,
+          dependency_critical, dependencies_json, cancel_requested, notes_path, report_path, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(workflow_id, phase_id)
+        DO UPDATE SET
+          status = excluded.status,
+          current_step = excluded.current_step,
+          retry_count = excluded.retry_count,
+          state_version = excluded.state_version,
+          dependency_critical = excluded.dependency_critical,
+          dependencies_json = excluded.dependencies_json,
+          cancel_requested = excluded.cancel_requested,
+          notes_path = excluded.notes_path,
+          report_path = excluded.report_path,
+          updated_at = excluded.updated_at
+        ''',
+        (
+            args.workflow_id,
+            args.phase_id,
+            status,
+            args.current_step,
+            args.retry_count if args.retry_count is not None else 0,
+            args.state_version if args.state_version is not None else 1,
+            int(parse_bool(args.dependency_critical)),
+            json_dumps(normalized_deps),
+            int(parse_bool(args.cancel_requested)),
+            args.notes_path,
+            args.report_path,
+            ts,
+        ),
+    )
+    append_event_record(
+        conn,
+        workflow_id=args.workflow_id,
+        actor=args.actor,
+        event_type='phase_state_upserted',
+        payload={
+            'phase_id': args.phase_id,
+            'status': status,
+            'current_step': args.current_step,
+            'state_version': args.state_version if args.state_version is not None else 1,
+            'dependency_critical': parse_bool(args.dependency_critical),
+            'dependencies': normalized_deps,
+            'cancel_requested': parse_bool(args.cancel_requested),
+        },
+    )
+    set_updated_at(conn, args.workflow_id)
+    return list_phase_states(
+        conn,
+        argparse.Namespace(
+            workflow_id=args.workflow_id,
+            actor=args.actor,
+        ),
+    )
+
+
+def list_phase_states(conn: sqlite3.Connection, args: argparse.Namespace) -> dict[str, Any]:
+    ensure_workflow_exists(conn, args.workflow_id)
+    rows = conn.execute(
+        '''
+        SELECT workflow_id, phase_id, status, current_step, retry_count, state_version,
+               dependency_critical, dependencies_json, cancel_requested, notes_path, report_path, updated_at
+        FROM phase_runtime_state
+        WHERE workflow_id = ?
+        ORDER BY phase_id
+        ''',
+        (args.workflow_id,),
+    ).fetchall()
+    return {
+        'workflow_id': args.workflow_id,
+        'phase_states': [
+            {
+                'phase_id': row['phase_id'],
+                'status': row['status'],
+                'current_step': row['current_step'],
+                'retry_count': row['retry_count'],
+                'state_version': row['state_version'],
+                'dependency_critical': bool(row['dependency_critical']),
+                'dependencies': json_loads(row['dependencies_json'], []),
+                'cancel_requested': bool(row['cancel_requested']),
+                'notes_path': row['notes_path'],
+                'report_path': row['report_path'],
+                'updated_at': row['updated_at'],
+            }
+            for row in rows
+        ],
+    }
+
+
+def resolve_phase_resume(conn: sqlite3.Connection, args: argparse.Namespace) -> dict[str, Any]:
+    ensure_workflow_exists(conn, args.workflow_id)
+    rows = conn.execute(
+        '''
+        SELECT phase_id, status, current_step, dependency_critical, dependencies_json, cancel_requested, updated_at
+        FROM phase_runtime_state
+        WHERE workflow_id = ?
+        ORDER BY phase_id
+        ''',
+        (args.workflow_id,),
+    ).fetchall()
+    states = [dict(row) for row in rows]
+    if not states:
+        return {
+            'workflow_id': args.workflow_id,
+            'can_proceed': False,
+            'reason': 'no phase runtime state found',
+            'next_phase_id': None,
+        }
+
+    by_id = {row['phase_id']: row for row in states}
+
+    def dependencies_ready(row: dict[str, Any]) -> tuple[bool, list[str], list[str]]:
+        deps = json_loads(row.get('dependencies_json'), [])
+        if not isinstance(deps, list):
+            deps = []
+        missing = [dep for dep in deps if dep not in by_id]
+        unresolved = [dep for dep in deps if dep in by_id and by_id[dep]['status'] != 'completed']
+        return len(unresolved) == 0 and len(missing) == 0, missing, unresolved
+
+    ordered_status = ['waiting_user', 'in_progress', 'pending']
+    for candidate_status in ordered_status:
+        for row in states:
+            if row['status'] != candidate_status:
+                continue
+            if row['cancel_requested']:
+                continue
+            ready, missing, unresolved = dependencies_ready(row)
+            if ready:
+                return {
+                    'workflow_id': args.workflow_id,
+                    'can_proceed': True,
+                    'reason': f"resume selector picked {row['phase_id']} ({candidate_status})",
+                    'next_phase_id': row['phase_id'],
+                    'next_status': candidate_status,
+                }
+            if row['dependency_critical'] and (missing or unresolved):
+                detail_parts: list[str] = []
+                if missing:
+                    detail_parts.append(f'missing={missing}')
+                if unresolved:
+                    unresolved_states = [f'{dep}:{by_id[dep]["status"]}' for dep in unresolved if dep in by_id]
+                    detail_parts.append(f'unresolved={unresolved_states}')
+                return {
+                    'workflow_id': args.workflow_id,
+                    'can_proceed': False,
+                    'reason': (
+                        f"dependency_critical = true but dependencies unresolved for {row['phase_id']}: "
+                        + '; '.join(detail_parts)
+                    ),
+                    'next_phase_id': row['phase_id'],
+                    'next_status': 'waiting_user',
+                }
+
+    return {
+        'workflow_id': args.workflow_id,
+        'can_proceed': False,
+        'reason': 'no resumable phase found',
+        'next_phase_id': None,
+    }
+
+
 def print_json(payload: Any) -> None:
     json.dump(payload, sys.stdout, ensure_ascii=False, indent=2)
     sys.stdout.write('\n')
@@ -1910,6 +2146,30 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument('--plan-name')
     validate.add_argument('--step', required=True)
     validate.set_defaults(handler=validate_transition)
+
+    phase_upsert = subparsers.add_parser('upsert-phase-state')
+    phase_upsert.add_argument('--workflow-id', required=True)
+    phase_upsert.add_argument('--phase-id', required=True)
+    phase_upsert.add_argument('--status', required=True, choices=sorted(VALID_PHASE_RUNTIME_STATUSES))
+    phase_upsert.add_argument('--current-step')
+    phase_upsert.add_argument('--retry-count', type=int)
+    phase_upsert.add_argument('--state-version', type=int)
+    phase_upsert.add_argument('--dependency-critical', default='false')
+    phase_upsert.add_argument('--dependencies-json')
+    phase_upsert.add_argument('--cancel-requested', default='false')
+    phase_upsert.add_argument('--notes-path')
+    phase_upsert.add_argument('--report-path')
+    phase_upsert.add_argument('--actor', default='orchestrator')
+    phase_upsert.set_defaults(handler=upsert_phase_state)
+
+    phase_list = subparsers.add_parser('list-phase-states')
+    phase_list.add_argument('--workflow-id', required=True)
+    phase_list.add_argument('--actor', default='orchestrator')
+    phase_list.set_defaults(handler=list_phase_states)
+
+    phase_resume = subparsers.add_parser('resolve-phase-resume')
+    phase_resume.add_argument('--workflow-id', required=True)
+    phase_resume.set_defaults(handler=resolve_phase_resume)
 
     return parser
 

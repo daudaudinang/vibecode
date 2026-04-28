@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "skill": "implement-plan",
+  "status": "PASS",
+  "artifacts": {
+    "primary": ".codex/pipeline/PLAN_V3_SINGLE_FIXTURE/03-implement-plan.output.md"
+  }
+}
